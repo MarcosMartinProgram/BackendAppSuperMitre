@@ -28,6 +28,10 @@ const Usuario = sequelize.define('Usuario', {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
   },
+  numero_whatsapp: {
+    type: DataTypes.INTEGER,
+    allowNull: false,
+  },
 }, {
   tableName: 'usuarios_app', // Especificar el nombre exacto de la tabla
   timestamps: false, // Si no tienes columnas createdAt/updatedAt

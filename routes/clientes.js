@@ -7,7 +7,7 @@ const router = express.Router();
 
 // Endpoint para registrar un cliente
 router.post('/registrar', async (req, res) => {
-  const { nombre, email, direccion, telefono, password } = req.body;
+  const { nombre, email, direccion, password, numero_whatsapp } = req.body;
 
   try {
     // Verificar si el cliente ya existe
@@ -21,8 +21,10 @@ router.post('/registrar', async (req, res) => {
     const nuevoUsuario = await Usuario.create({
       nombre,
       email,
+      direccion,
       password: hashedPassword,
       rol: 'cliente',
+      numero_whatsapp
     });
 
     // Crear el cliente
@@ -30,7 +32,6 @@ router.post('/registrar', async (req, res) => {
       nombre,
       email,
       direccion,
-      telefono,
       id_usuario: nuevoUsuario.id_usuario,
     });
 
