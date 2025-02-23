@@ -63,12 +63,16 @@ router.post('/login', async (req, res) => {
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Contraseña incorrecta.' });
     }
+    console.log("Valor de SECRET_KEY:", SECRET_KEY);
+
 
     const token = jwt.sign(
       { id: user.id_usuario, rol: user.rol },
-      SECRET_KEY,
+      process.env.SECRET_KEY,
       { expiresIn: '1h' }
     );
+    console.log("Valor de SECRET_KEY:", SECRET_KEY);
+
 
     res.json({
       token,
