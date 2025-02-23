@@ -1,3 +1,4 @@
+// routes/auth.js
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -6,12 +7,17 @@ const Usuario = require('../models/Usuario');
 const router = express.Router();
 const SECRET_KEY = process.env.SECRET_KEY; // Usar variable de entorno para mayor seguridad
 const ADMIN_CODE = "ADMIN123"; // Código especial para crear usuarios "master" o "vendedor"
-
+console.log("SECRET_KEY:", SECRET_KEY);
 // Endpoint de login con registro automático
 router.post('/login', async (req, res) => {
-  const { email, password, nombre } = req.body;
-  console.log("Datos recibidos:", { email, password, nombre });
-
+  const { email, password, nombre, numero_whatsapp, direccion } = req.body;
+  console.log("Datos recibidos en /login:", {
+    email,
+    password,
+    nombre,
+    numero_whatsapp,
+    direccion,
+  });
   try {
     let user = await Usuario.findOne({ where: { email } });
 
@@ -21,13 +27,24 @@ router.post('/login', async (req, res) => {
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
+      console.log("Creando nuevo usuario con los siguientes datos:", {
+        nombre,
+        email,
+        password: hashedPassword,
+        rol: 'cliente',
+        numero_whatsapp,
+        direccion,
+      });
 
       user = await Usuario.create({
         nombre,
         email,
         password: hashedPassword,
         rol: 'cliente',
+        numero_whatsapp, // Agregar estos campos
+        direccion
       });
+      console.log("Usuario creado:", user); // Agrega este log para ver el usuario creado
 
       return res.status(201).json({
         message: 'Usuario creado automáticamente con rol de cliente.',
@@ -36,6 +53,8 @@ router.post('/login', async (req, res) => {
           nombre: user.nombre,
           email: user.email,
           rol: user.rol,
+          numero_whatsapp: user.numero_whatsapp,
+          direccion: user.direccion,
         },
       });
     }
@@ -67,8 +86,17 @@ router.post('/login', async (req, res) => {
 
 // Endpoint para registro manual con roles especiales
 router.post('/register', async (req, res) => {
-  const { nombre, email, password, rol, adminCode } = req.body;
+  const { nombre, email, password, rol, adminCode, numero_whatsapp, direccion } = req.body;
 
+  console.log("Datos recibidos en /register:", {
+    nombre,
+    email,
+    password,
+    rol,
+    adminCode,
+    numero_whatsapp,
+    direccion,
+  });
   try {
     // Validar si ya existe un usuario con el mismo email
     const existingUser = await Usuario.findOne({ where: { email } });
@@ -87,6 +115,14 @@ router.post('/register', async (req, res) => {
 
     // Crear hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
+    console.log("Creando nuevo usuario con los siguientes datos:", {
+      nombre,
+      email,
+      password: hashedPassword,
+      rol: userRole,
+      numero_whatsapp,
+      direccion,
+    });
 
     // Crear el usuario en la base de datos
     const newUser = await Usuario.create({
@@ -94,6 +130,8 @@ router.post('/register', async (req, res) => {
       email,
       password: hashedPassword,
       rol: userRole,
+      numero_whatsapp,
+      direccion      
     });
 
     res.status(201).json({
@@ -103,6 +141,8 @@ router.post('/register', async (req, res) => {
         nombre: newUser.nombre,
         email: newUser.email,
         rol: newUser.rol,
+        numero_whatsapp: newUser.numero_whatsapp, // Incluir en la respuesta
+        direccion: newUser.direccion
       },
     });
   } catch (error) {

@@ -1,3 +1,4 @@
+// models/Cliente.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 const Usuario = require('./Usuario'); // Si hay relación entre clientes y usuarios

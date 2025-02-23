@@ -1,3 +1,4 @@
+// backend models/Usuario.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -29,12 +30,16 @@ const Usuario = sequelize.define('Usuario', {
     defaultValue: DataTypes.NOW,
   },
   numero_whatsapp: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  direccion: {
+    type: DataTypes.STRING,
     allowNull: false,
   },
 }, {
-  tableName: 'usuarios_app', // Especificar el nombre exacto de la tabla
-  timestamps: false, // Si no tienes columnas createdAt/updatedAt
+  tableName: 'usuarios_app', 
+  timestamps: false, 
 });
 Usuario.associate = (models) => {
   Usuario.hasMany(models.Ticket, { foreignKey: 'usuario_id' });
