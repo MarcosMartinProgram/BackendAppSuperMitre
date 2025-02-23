@@ -39,7 +39,7 @@ const Usuario = sequelize.define('Usuario', {
   },
 }, {
   tableName: 'usuarios_app', 
-  timestamps: false, 
+  timestamps: true, 
 });
 Usuario.associate = (models) => {
   Usuario.hasMany(models.Ticket, { foreignKey: 'usuario_id' });
