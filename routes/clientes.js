@@ -1,3 +1,4 @@
+// routes/clientes.js
 const express = require('express');
 const Cliente = require('../models/Cliente');
 const bcrypt = require('bcryptjs'); // Por si también necesitas crear un usuario
@@ -7,7 +8,7 @@ const router = express.Router();
 
 // Endpoint para registrar un cliente
 router.post('/registrar', async (req, res) => {
-  const { nombre, email, direccion, telefono, password } = req.body;
+  const { nombre, email, password, numero_whatsapp, direccion } = req.body;
 
   try {
     // Verificar si el cliente ya existe
@@ -21,17 +22,22 @@ router.post('/registrar', async (req, res) => {
     const nuevoUsuario = await Usuario.create({
       nombre,
       email,
+      direccion,
       password: hashedPassword,
       rol: 'cliente',
+      numero_whatsapp,
+      direccion
+
     });
 
     // Crear el cliente
     const nuevoCliente = await Cliente.create({
       nombre,
       email,
+      numero_whatsapp,
       direccion,
-      telefono,
       id_usuario: nuevoUsuario.id_usuario,
+      
     });
 
     res.status(201).json({
