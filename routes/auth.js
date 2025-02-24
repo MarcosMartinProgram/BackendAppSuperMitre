@@ -67,7 +67,7 @@ router.post('/login', async (req, res) => {
 
 
     const token = jwt.sign(
-      { id: user.id_usuario, rol: user.rol },
+      { id: user.id_usuario, email: user.email, rol: user.rol },
       process.env.SECRET_KEY,
       { expiresIn: '1h' }
     );
@@ -92,15 +92,6 @@ router.post('/login', async (req, res) => {
 router.post('/register', async (req, res) => {
   const { nombre, email, password, rol, adminCode, numero_whatsapp, direccion } = req.body;
 
-  console.log("Datos recibidos en /register:", {
-    nombre,
-    email,
-    password,
-    rol,
-    adminCode,
-    numero_whatsapp,
-    direccion,
-  });
   try {
     // Validar si ya existe un usuario con el mismo email
     const existingUser = await Usuario.findOne({ where: { email } });
@@ -114,19 +105,11 @@ router.post('/register', async (req, res) => {
       if (adminCode !== ADMIN_CODE) {
         return res.status(403).json({ error: 'Código de administrador inválido.' });
       }
-      userRole = rol; // Asignar rol especial
+      userRole = rol;
     }
 
     // Crear hash de la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("Creando nuevo usuario con los siguientes datos:", {
-      nombre,
-      email,
-      password: hashedPassword,
-      rol: userRole,
-      numero_whatsapp,
-      direccion,
-    });
 
     // Crear el usuario en la base de datos
     const newUser = await Usuario.create({
@@ -135,9 +118,17 @@ router.post('/register', async (req, res) => {
       password: hashedPassword,
       rol: userRole,
       numero_whatsapp,
-      direccion      
+      direccion
     });
 
+    // **Generar token JWT**
+    const token = jwt.sign(
+      { id: newUser.id_usuario, email: newUser.email, rol: newUser.rol },
+      process.env.JWT_SECRET,  // Usa una variable de entorno para la clave secreta
+      { expiresIn: "1h" }  // Expira en 1 hora
+    );
+
+    // Respuesta con el usuario y el token
     res.status(201).json({
       message: 'Usuario registrado exitosamente.',
       user: {
@@ -145,10 +136,12 @@ router.post('/register', async (req, res) => {
         nombre: newUser.nombre,
         email: newUser.email,
         rol: newUser.rol,
-        numero_whatsapp: newUser.numero_whatsapp, // Incluir en la respuesta
+        numero_whatsapp: newUser.numero_whatsapp,
         direccion: newUser.direccion
       },
+      token  // Enviar el token en la respuesta
     });
+
   } catch (error) {
     console.error('Error al registrar usuario:', error);
     res.status(500).json({ error: 'Error en el servidor.' });
