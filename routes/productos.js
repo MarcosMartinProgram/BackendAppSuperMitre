@@ -1,3 +1,4 @@
+// routes/productos.js
 const express = require('express');
 const router = express.Router();
 const Producto = require('../models/Producto'); // Importamos el modelo de Producto
@@ -19,7 +20,7 @@ router.get('/por-rubro/:id_rubro', async (req, res) => {
 
 // Crear un nuevo producto
 router.post('/', async (req, res) => {
-  const { codigo_barras, nombre, precio, stock, id_rubro, descripcion } = req.body;
+  const { codigo_barras, nombre, precio, stock, id_rubro, descripcion, imagen_url } = req.body;
 
   if (!codigo_barras || !nombre || !precio || !stock || !id_rubro) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
@@ -31,7 +32,9 @@ router.post('/', async (req, res) => {
       precio,
       stock,
       id_rubro,
-      descripcion });
+      descripcion,
+      imagen_url
+    });
     res.status(201).json({
       message: 'Producto creado con éxito',
       id: nuevoProducto.id,
@@ -45,7 +48,7 @@ router.post('/', async (req, res) => {
 // Actualizar un producto
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio, stock, descripcion } = req.body;
+  const { nombre, precio, stock, descripcion, imagen_url } = req.body;
 
   try {
     const producto = await Producto.findByPk(id); // Busca el producto por ID
@@ -53,7 +56,7 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    await producto.update({ nombre, precio, stock, descripcion });
+    await producto.update({ nombre, precio, stock, descripcion, imagen_url });
     res.status(200).json({ message: 'Producto actualizado con éxito' });
   } catch (error) {
     console.error('Error al actualizar producto:', error.message);

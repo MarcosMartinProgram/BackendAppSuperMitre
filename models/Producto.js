@@ -1,3 +1,4 @@
+// /models|Producto.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
 
@@ -26,6 +27,10 @@ const Producto = sequelize.define('Producto', {
     id_rubro: {
       type: DataTypes.INTEGER,
       allowNull: false
+    },
+    imagen_url: {  
+      type: DataTypes.TEXT,
+      allowNull: true
     },
     created_at: {
       type: DataTypes.DATE,
