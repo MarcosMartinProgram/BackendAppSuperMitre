@@ -16,7 +16,8 @@ const rubrosRouter = require('./routes/rubros'); // Asegúrate de importar corre
 const ticketRoutes = require('./routes/tickets');
 const productoRoutes = require('./routes/productos');
 const reportesRoutes = require('./routes/reportes');
-const imagenesRoutes = require("./routes/imagenes");
+const imagenAndroidRoutes = require("./routes/imagenAndroidRoutes");
+
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -33,7 +34,7 @@ app.use('/api/tickets', ticketRoutes);
 //app.use('/api/productos', productoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use("/api/mercadopago", mercadoPagoRoutes);
-app.use("/api/imagenes", imagenesRoutes);
+app.use("/api/imagenAndroid", imagenAndroidRoutes);
 
 // Verificar conexión a la base de datos
 sequelize
