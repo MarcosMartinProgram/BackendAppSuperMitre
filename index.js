@@ -16,6 +16,7 @@ const rubrosRouter = require('./routes/rubros'); // Asegúrate de importar corre
 const ticketRoutes = require('./routes/tickets');
 const productoRoutes = require('./routes/productos');
 const reportesRoutes = require('./routes/reportes');
+const imagenesRoutes = require("./routes/imagenes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,6 +33,7 @@ app.use('/api/tickets', ticketRoutes);
 //app.use('/api/productos', productoRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use("/api/mercadopago", mercadoPagoRoutes);
+app.use("/api/imagenes", imagenesRoutes);
 
 // Verificar conexión a la base de datos
 sequelize
@@ -39,10 +41,13 @@ sequelize
   .then(() => console.log('Conexión a la base de datos exitosa.'))
   .catch((err) => console.error('Error al conectar a la base de datos:', err));
 
-// Rutas principales
+
+ // Rutas principales
 app.get('/', (req, res) => {
   res.send('API funcionando correctamente.');
 });
+
+
 // Rutas para back_urls
 app.get("/success", (req, res) => {
   res.send("Pago exitoso");
