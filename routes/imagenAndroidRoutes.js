@@ -1,14 +1,17 @@
+// routes/imagenAndroidRoutes.js
 const express = require('express');
 const router = express.Router();
 const Configuracion = require('../models/ImagenAndroid');
 const ImagenAndroid = require('../models/ImagenAndroid');
 
 // Ruta para obtener el logo y el banner
+const { Op } = require('sequelize');
+
 router.get('/imagenes', async (req, res) => {
     try {
         const imagenes = await ImagenAndroid.findAll({
             where: {
-                clave: ['logo', 'baner']
+                clave: { [Op.in]: ['logo', 'baner'] } // ✅ Ahora sí filtra correctamente
             }
         });
 
@@ -23,5 +26,6 @@ router.get('/imagenes', async (req, res) => {
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 });
+
 
 module.exports = router;
