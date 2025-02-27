@@ -1,3 +1,4 @@
+// models/ImagenAndroid.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database'); // Asegúrate de que la configuración de Sequelize está en este archivo
 
