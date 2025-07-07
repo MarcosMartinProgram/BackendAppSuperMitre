@@ -10,7 +10,7 @@ const client = new mercadopago({
 
 const crearPreferencia = async (req, res) => {
     try {
-        const { carrito } = req.body;
+        const { carrito, plataforma } = req.body;
 
         let items = carrito.map(item => ({
             title: item.nombre,
@@ -19,14 +19,21 @@ const crearPreferencia = async (req, res) => {
             currency_id: "ARS"
         }));
 
+        // URLs para web y app
+        const webUrls = {
+            success: "https://tusitio.com/success",
+            failure: "https://tusitio.com/failure",
+            pending: "https://tusitio.com/pending"
+        };
+        const appUrls = {
+            success: "supermitreapp://congrats",
+            failure: "supermitreapp://failure",
+            pending: "supermitreapp://pending"
+        };
+
         let preference = {
             items,
-            back_urls: {
-                success: "supermitreapp://congrats",
-                failure: "supermitreapp://failure",
-                pending: "supermitreapp://pending"
-            },
-            
+            back_urls: plataforma === "app" ? appUrls : webUrls,
             auto_return: "approved"
         };
 
