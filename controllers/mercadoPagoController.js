@@ -19,12 +19,19 @@ const crearPreferencia = async (req, res) => {
             currency_id: "ARS"
         }));
 
+        const isProd = process.env.NODE_ENV === "production";
         // URLs para web y app
-        const webUrls = {
-            success: "https://tusitio.com/success",
-            failure: "https://tusitio.com/failure",
-            pending: "https://tusitio.com/pending"
-        };
+        const webUrls = isProd
+          ? {
+              success: "https://supermitre.com.ar/success",
+              failure: "https://supermitre.com.ar/failure",
+              pending: "https://supermitre.com.ar/pending"
+            }
+          : {
+              success: "http://localhost:3000/success",
+              failure: "http://localhost:3000/failure",
+              pending: "http://localhost:3000/pending"
+            };
         const appUrls = {
             success: "supermitreapp://congrats",
             failure: "supermitreapp://failure",
