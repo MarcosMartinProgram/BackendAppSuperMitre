@@ -48,15 +48,15 @@ router.post('/', async (req, res) => {
 // Actualizar un producto
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio, stock, descripcion, imagen_url } = req.body;
+  const { nombre, precio, stock, descripcion, imagen_url, id_rubro } = req.body; // <-- agrega id_rubro
 
   try {
-    const producto = await Producto.findByPk(id); // Busca el producto por ID
+    const producto = await Producto.findByPk(id);
     if (!producto) {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
-    await producto.update({ nombre, precio, stock, descripcion, imagen_url });
+    await producto.update({ nombre, precio, stock, descripcion, imagen_url, id_rubro }); // <-- agrega id_rubro
     res.status(200).json({ message: 'Producto actualizado con éxito' });
   } catch (error) {
     console.error('Error al actualizar producto:', error.message);
