@@ -32,6 +32,15 @@ const Producto = sequelize.define('Producto', {
       type: DataTypes.TEXT,
       allowNull: true
     },
+    es_variable: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      allowNull: false
+    },
+    precio_base: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW
@@ -44,8 +53,9 @@ const Producto = sequelize.define('Producto', {
     tableName: 'productos',
     timestamps: false
   });
+  
   Producto.associate = (models) => {
     Producto.hasMany(models.Ticket, { foreignKey: 'producto_id' });
-};
+  };
 
 module.exports = Producto;
