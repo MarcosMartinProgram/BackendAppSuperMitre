@@ -1,81 +1,118 @@
 //controllers/mercadoPagoController.js
-const mercadopago = require("mercadopago").MercadoPagoConfig;
-const { Preference } = require("mercadopago");
+const { MercadoPagoConfig, Preference } = require("mercadopago");
+
+// ✅ ACCESS TOKEN configurado
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
 
-// Configurar Mercado Pago con la nueva versión del SDK
-const client = new mercadopago({
-    accessToken: MP_ACCESS_TOKEN
+console.log("🔐 MP ACCESS TOKEN:", MP_ACCESS_TOKEN ? "✅ Configurado" : "❌ No configurado");
+
+// Configurar cliente de Mercado Pago
+const client = new MercadoPagoConfig({
+    accessToken: MP_ACCESS_TOKEN,
+    options: {
+        timeout: 5000, // 5 segundos de timeout
+        idempotencyKey: Date.now().toString()
+    }
 });
 
 const crearPreferencia = async (req, res) => {
     try {
-        const { carrito, plataforma } = req.body;
+        console.log("\n🛒 === INICIANDO PROCESO DE PAGO ===");
+        console.log("📦 Body recibido:", JSON.stringify(req.body, null, 2));
+        
+        const { carrito, plataforma = "web" } = req.body;
 
-        // ✅ MEJORADO: Items con mejor presentación
-        let items = carrito.map(item => ({
-            title: item.nombre,
-            unit_price: Number(item.precio),
-            quantity: item.cantidad,
-            currency_id: "ARS",
-            // ✅ AGREGADO: Información adicional del producto
-            description: `Producto de Super Mitre - ${item.nombre}`,
-            picture_url: item.imagen_url || null,
-            category_id: "others"
-        }));
+        // ✅ VALIDACIONES
+        if (!carrito || !Array.isArray(carrito) || carrito.length === 0) {
+            console.log("❌ Error: Carrito inválido");
+            return res.status(400).json({ 
+                error: "Carrito inválido o vacío",
+                received: req.body 
+            });
+        }
 
-        // URLs para web y app
-        const webUrls = {
-            success: "http://localhost:3000/payment-success",
-            failure: "http://localhost:3000/payment-failure", 
-            pending: "http://localhost:3000/payment-pending"
+        // ✅ PROCESAR ITEMS
+        const items = carrito.map((item, index) => {
+            const precio = Number(item.precio) || 0;
+            const cantidad = Number(item.cantidad) || 1;
+            
+            return {
+                id: String(item.codigo_barras || `item-${index}`),
+                title: String(item.nombre || `Producto ${index + 1}`).substring(0, 256),
+                unit_price: precio,
+                quantity: cantidad,
+                currency_id: "ARS"
+            };
+        }).filter(item => item.unit_price > 0); // Solo items con precio válido
+
+        if (items.length === 0) {
+            return res.status(400).json({ 
+                error: "No hay productos válidos en el carrito"
+            });
+        }
+
+        console.log(`💰 Procesando ${items.length} items válidos`);
+
+        // ✅ URLs DE RETORNO - Para producción
+        const isProduction = req.get('host').includes('alwaysdata.net');
+        const baseUrl = isProduction ? 
+            "https://supermitre.com.ar" : // 🔴 CAMBIAR por tu dominio de frontend
+            "http://localhost:3000";
+
+        const backUrls = {
+            success: `${baseUrl}/payment-success`,
+            failure: `${baseUrl}/payment-failure`,
+            pending: `${baseUrl}/payment-pending`
         };
-        const appUrls = {
-            success: "supermitreapp://congrats",
-            failure: "supermitreapp://failure",
-            pending: "supermitreapp://pending"
-        };
 
-        let preference = {
-            items,
-            back_urls: plataforma === "app" ? appUrls : webUrls,
+        // ✅ CREAR PREFERENCIA
+        const preferenceBody = {
+            items: items,
+            back_urls: backUrls,
             auto_return: "approved",
-            // ✅ AGREGADO: Información del negocio
-            marketplace: "SuperMitre",
-            marketplace_fee: 0,
-            // ✅ AGREGADO: Información adicional
             statement_descriptor: "SUPER MITRE",
             external_reference: `SM-${Date.now()}`,
-            // ✅ AGREGADO: Configuración de pago
+            expires: true,
+            expiration_date_from: new Date().toISOString(),
+            expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
             payment_methods: {
-                excluded_payment_methods: [],
+                installments: 12,
                 excluded_payment_types: [],
-                installments: 12
-            },
-            // ✅ AGREGADO: Información del vendedor
-            additional_info: {
-                payer: {
-                    first_name: "Cliente",
-                    last_name: "SuperMitre"
-                },
-                items: items.map(item => ({
-                    id: item.title,
-                    title: item.title,
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit_price: item.unit_price
-                }))
+                excluded_payment_methods: []
             }
         };
 
-        // Crear la preferencia con la nueva configuración
-        const preferenceClient = new Preference(client);
-        const response = await preferenceClient.create({ body: preference });
+        console.log("🔧 Configuración de preferencia:", JSON.stringify(preferenceBody, null, 2));
 
-        res.json({ id: response.id });
+        const preference = new Preference(client);
+        const response = await preference.create({ body: preferenceBody });
+
+        console.log("✅ Preferencia creada:", response.id);
+
+        // ✅ RESPUESTA
+        res.status(200).json({ 
+            success: true,
+            id: response.id,
+            init_point: response.init_point,
+            sandbox_init_point: response.sandbox_init_point
+        });
+
     } catch (error) {
-        console.error("Error al crear la preferencia:", error);
-        res.status(500).json({ error: error.message });
+        console.error("💥 ERROR DETALLADO:");
+        console.error("Mensaje:", error.message);
+        console.error("Stack:", error.stack);
+        
+        if (error.response) {
+            console.error("Respuesta de MP:", error.response.data);
+            console.error("Status de MP:", error.response.status);
+        }
+
+        res.status(500).json({ 
+            success: false,
+            error: "Error interno del servidor",
+            message: error.message,
+            details: error.response?.data || null
+        });
     }
 };
 
