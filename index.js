@@ -7,7 +7,7 @@ const sequelize = require('./config/database');
 const Usuario = require('./models/Usuario');
 const Ticket = require('./models/Ticket');
 const Producto = require('./models/Producto');
-const mercadoPagoRoutes = require("./routes/mercadoPagoRoutes");
+const mercadoPagoRoutes = require('./routes/mercadoPagoRoutes');
 
 const clienteRoutes = require('./routes/clientes');
 const authRoutes = require('./routes/auth');
@@ -70,4 +70,8 @@ sequelize.sync({ alter: true }) // Usa `alter: true` para actualizar o crear tab
 // Levantar servidor
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en http://localhost:${PORT}`);
+  console.log("🚀 Servidor iniciado");
+  console.log("🔐 Variables de entorno:");
+  console.log("- DB_HOST:", process.env.DB_HOST ? "✅" : "❌");
+  console.log("- MP_ACCESS_TOKEN:", process.env.MP_ACCESS_TOKEN ? "✅" : "❌");
 });
