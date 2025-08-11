@@ -1,13 +1,19 @@
+require('dotenv').config();
 const { Sequelize } = require('sequelize');
-const config = require('./config/environment'); // ✅ Usar configuración dinámica
+
+console.log('🔍 Configuración de base de datos:');
+console.log('- DB_HOST:', process.env.DB_HOST);
+console.log('- DB_NAME:', process.env.DB_NAME);
+console.log('- DB_USER:', process.env.DB_USER);
+console.log('- DB_PASSWORD:', process.env.DB_PASSWORD ? '✅ CONFIGURADA' : '❌ NO CONFIGURADA');
 
 const sequelize = new Sequelize(
-  config.DB_NAME,
-  config.DB_USER, 
-  config.DB_PASSWORD,
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASSWORD,
   {
-    host: config.DB_HOST,
-    port: config.DB_PORT,
+    host: process.env.DB_HOST,
+    port: 3306, // ✅ PUERTO FIJO 3306 para MySQL (no usar process.env.PORT)
     dialect: 'mysql',
     logging: false,
     pool: {
