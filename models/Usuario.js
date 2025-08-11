@@ -1,58 +1,59 @@
 // backend models/Usuario.js
-const { DataTypes, Sequelize } = require('sequelize');
-const sequelize = require('../config/database');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../database');
 
 const Usuario = sequelize.define('Usuario', {
   id_usuario: {
     type: DataTypes.INTEGER,
     primaryKey: true,
-    autoIncrement: true,
+    autoIncrement: true
   },
   nombre: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(100),
     allowNull: false,
+    validate: {
+      notEmpty: true,
+      len: [2, 100]
+    }
   },
   email: {
-    type: DataTypes.STRING,
+    type: DataTypes.STRING(150),
     allowNull: false,
     unique: true,
+    validate: {
+      isEmail: true,
+      notEmpty: true
+    }
   },
   password: {
-    type: DataTypes.STRING,
+    type: DataTypes.TEXT, // ✅ CAMBIADO: Usar TEXT para passwords hasheadas
     allowNull: false,
+    validate: {
+      notEmpty: true
+    }
   },
   rol: {
-    type: DataTypes.ENUM('master', 'vendedor', 'cliente'),
-    defaultValue: 'vendedor',
+    type: DataTypes.ENUM('cliente', 'vendedor', 'master'),
+    defaultValue: 'cliente',
+    allowNull: false
+  },
+  numero_whatsapp: {
+    type: DataTypes.STRING(20),
+    allowNull: true
+  },
+  direccion: {
+    type: DataTypes.TEXT,
+    allowNull: true
   },
   fecha_registro: {
     type: DataTypes.DATE,
-    defaultValue: DataTypes.NOW,
-  },
-  numero_whatsapp: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  direccion: {
-    type: DataTypes.STRING,
-    allowNull: false,
-  },
-  createdAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: Sequelize.literal('CURRENT_TIMESTAMP')
-  },
-  updatedAt: {
-    type: DataTypes.DATE,
-    allowNull: false,
-    defaultValue: Sequelize.literal('CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP')
+    defaultValue: DataTypes.NOW
   }
 }, {
-  tableName: 'usuarios_app', 
-  timestamps: true, 
+  tableName: 'usuarios',
+  timestamps: true,
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 });
-Usuario.associate = (models) => {
-  Usuario.hasMany(models.Ticket, { foreignKey: 'usuario_id' });
-};
 
 module.exports = Usuario;
