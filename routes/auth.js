@@ -3,10 +3,9 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Usuario = require('../models/Usuario');
-const config = require('../config/environment'); // ✅ Usar configuración dinámica
 
 const router = express.Router();
-const SECRET_KEY = config.SECRET_KEY;
+const SECRET_KEY = process.env.SECRET_KEY || 'clave_secreta_segura';
 const ADMIN_CODE = "ADMIN123";
 
 console.log("🔐 Configuración auth:", {

@@ -1,6 +1,6 @@
 // backend/models/Usuario.js
 const { DataTypes } = require('sequelize');
-const sequelize = require('../database');
+const sequelize = require('../config/database'); // ✅ DEBE SER '../config/database'
 
 const Usuario = sequelize.define('Usuario', {
   id_usuario: {
@@ -40,7 +40,7 @@ const Usuario = sequelize.define('Usuario', {
   }
 }, {
   tableName: 'usuarios',
-  timestamps: false, // ✅ Importante: Desactivar timestamps automáticos
+  timestamps: false // ✅ Importante: Desactivar timestamps automáticos
 });
 
 module.exports = Usuario;
