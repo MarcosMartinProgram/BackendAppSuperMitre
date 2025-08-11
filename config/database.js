@@ -1,15 +1,24 @@
 const { Sequelize } = require('sequelize');
-require('dotenv').config();
-
+const config = require('./config/environment'); // ✅ Usar configuración dinámica
 
 const sequelize = new Sequelize(
-  process.env.DB_NAME, // Nombre de la base de datos
-  process.env.DB_USER, // Usuario de la base de datos
-  process.env.DB_PASSWORD, // Contraseña
+  config.DB_NAME,
+  config.DB_USER, 
+  config.DB_PASSWORD,
   {
-    host: process.env.DB_HOST, // Dirección del servidor
+    host: config.DB_HOST,
+    port: config.DB_PORT,
     dialect: 'mysql',
-    logging: false, // Para evitar logs extensos
+    logging: false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    dialectOptions: {
+      connectTimeout: 60000,
+    }
   }
 );
 

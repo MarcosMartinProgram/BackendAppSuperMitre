@@ -1,4 +1,4 @@
-// backend models/Usuario.js
+// backend/models/Usuario.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../database');
 
@@ -10,27 +10,16 @@ const Usuario = sequelize.define('Usuario', {
   },
   nombre: {
     type: DataTypes.STRING(100),
-    allowNull: false,
-    validate: {
-      notEmpty: true,
-      len: [2, 100]
-    }
+    allowNull: false
   },
   email: {
     type: DataTypes.STRING(150),
     allowNull: false,
-    unique: true,
-    validate: {
-      isEmail: true,
-      notEmpty: true
-    }
+    unique: true
   },
   password: {
-    type: DataTypes.TEXT, // ✅ CAMBIADO: Usar TEXT para passwords hasheadas
-    allowNull: false,
-    validate: {
-      notEmpty: true
-    }
+    type: DataTypes.TEXT, // ✅ Importante: TEXT para passwords hasheadas
+    allowNull: false
   },
   rol: {
     type: DataTypes.ENUM('cliente', 'vendedor', 'master'),
@@ -51,9 +40,7 @@ const Usuario = sequelize.define('Usuario', {
   }
 }, {
   tableName: 'usuarios',
-  timestamps: true,
-  createdAt: 'createdAt',
-  updatedAt: 'updatedAt'
+  timestamps: false, // ✅ Importante: Desactivar timestamps automáticos
 });
 
 module.exports = Usuario;
