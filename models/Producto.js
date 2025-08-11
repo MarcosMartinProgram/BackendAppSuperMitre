@@ -20,6 +20,11 @@ const Producto = sequelize.define('Producto', {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
+    precio_lista2: {
+    type: DataTypes.DECIMAL(10, 2),
+    allowNull: false,
+    defaultValue: 0.00
+    },
     stock: {
       type: DataTypes.INTEGER,
       allowNull: false
@@ -51,7 +56,24 @@ const Producto = sequelize.define('Producto', {
     }
   }, {
     tableName: 'productos',
-    timestamps: false
+    timestamps: false,
+    hooks: {
+      // ✅ HOOK: Auto-calcular precio_lista2 antes de crear/actualizar
+      beforeSave: (producto) => {
+        if (producto.precio && (!producto.precio_lista2 || producto.precio_lista2 === 0)) {
+          const precioConAumento = producto.precio * 1.05;
+          const precioRedondeado = Math.round(precioConAumento);
+          
+          // Redondear para que termine en 00 o 50
+          const resto = precioRedondeado % 100;
+          if (resto < 50) {
+            producto.precio_lista2 = Math.floor(precioRedondeado / 50) * 50;
+          } else {
+            producto.precio_lista2 = Math.ceil(precioRedondeado / 100) * 100;
+          }
+        }
+      }
+    }
   });
   
   Producto.associate = (models) => {

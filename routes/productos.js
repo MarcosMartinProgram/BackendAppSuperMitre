@@ -3,15 +3,30 @@ const express = require('express');
 const router = express.Router();
 const Producto = require('../models/Producto');
 
+// ✅ FUNCIÓN HELPER: Calcular precio lista 2
+function calcularPrecioLista2(precio1) {
+  if (!precio1 || precio1 <= 0) return 0;
+  
+  const precioConAumento = precio1 * 1.05;
+  const precioRedondeado = Math.round(precioConAumento);
+  
+  // Redondear para que termine en 00 o 50
+  const resto = precioRedondeado % 100;
+  if (resto < 50) {
+    return Math.floor(precioRedondeado / 50) * 50;
+  } else {
+    return Math.ceil(precioRedondeado / 100) * 100;
+  }
+}
+
 // ✅ NUEVO: Obtener productos por rubro EXCLUYENDO productos variables para tienda online
 router.get('/por-rubro/:id_rubro', async (req, res) => {
   const { id_rubro } = req.params;
-  const { incluir_variables } = req.query; // Parámetro para incluir productos variables
+  const { incluir_variables } = req.query;
 
   try {
     const whereClause = { id_rubro };
     
-    // Si no se especifica incluir_variables, excluir productos variables
     if (!incluir_variables || incluir_variables === 'false') {
       whereClause.es_variable = false;
     }
@@ -39,19 +54,23 @@ router.get('/variables', async (req, res) => {
   }
 });
 
-// Crear un nuevo producto
+// ✅ ACTUALIZADO: Crear un nuevo producto con precio_lista2
 router.post('/', async (req, res) => {
-  const { codigo_barras, nombre, precio, stock, id_rubro, descripcion, imagen_url, es_variable, precio_base } = req.body;
+  const { codigo_barras, nombre, precio, precio_lista2, stock, id_rubro, descripcion, imagen_url, es_variable, precio_base } = req.body;
 
   if (!codigo_barras || !nombre || !precio || !stock || !id_rubro) {
     return res.status(400).json({ error: 'Faltan campos requeridos' });
   }
 
   try {
+    // ✅ Si no se proporciona precio_lista2, calcularlo automáticamente
+    const precioLista2Final = precio_lista2 || calcularPrecioLista2(precio);
+
     const nuevoProducto = await Producto.create({ 
       codigo_barras,
       nombre,
       precio,
+      precio_lista2: precioLista2Final, // ✅ NUEVO: Segunda lista de precios
       stock,
       id_rubro,
       descripcion,
@@ -59,9 +78,18 @@ router.post('/', async (req, res) => {
       es_variable: es_variable || false,
       precio_base: precio_base || null
     });
+
+    console.log('✅ Producto creado:', {
+      id: nuevoProducto.codigo_barras,
+      nombre: nuevoProducto.nombre,
+      precio: nuevoProducto.precio,
+      precio_lista2: nuevoProducto.precio_lista2
+    });
+
     res.status(201).json({
       message: 'Producto creado con éxito',
       id: nuevoProducto.codigo_barras,
+      producto: nuevoProducto
     });
   } catch (error) {
     console.error('Error al crear producto:', error.message);
@@ -69,10 +97,10 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Actualizar un producto
+// ✅ ACTUALIZADO: Actualizar un producto con precio_lista2
 router.put('/:id', async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio, stock, descripcion, imagen_url, id_rubro, es_variable, precio_base } = req.body;
+  const { nombre, precio, precio_lista2, stock, descripcion, imagen_url, id_rubro, es_variable, precio_base } = req.body;
 
   try {
     const producto = await Producto.findByPk(id);
@@ -80,9 +108,16 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Producto no encontrado' });
     }
 
+    // ✅ Si se cambió el precio pero no precio_lista2, recalcular
+    let precioLista2Final = precio_lista2;
+    if (precio !== producto.precio && !precio_lista2) {
+      precioLista2Final = calcularPrecioLista2(precio);
+    }
+
     await producto.update({ 
       nombre, 
       precio, 
+      precio_lista2: precioLista2Final, // ✅ NUEVO: Actualizar segunda lista
       stock, 
       descripcion, 
       imagen_url, 
@@ -90,7 +125,15 @@ router.put('/:id', async (req, res) => {
       es_variable: es_variable !== undefined ? es_variable : producto.es_variable,
       precio_base: precio_base !== undefined ? precio_base : producto.precio_base
     });
-    res.status(200).json({ message: 'Producto actualizado con éxito' });
+
+    console.log('✅ Producto actualizado:', {
+      id: producto.codigo_barras,
+      nombre: producto.nombre,
+      precio: producto.precio,
+      precio_lista2: producto.precio_lista2
+    });
+
+    res.status(200).json({ message: 'Producto actualizado con éxito', producto });
   } catch (error) {
     console.error('Error al actualizar producto:', error.message);
     res.status(500).json({ error: 'Error al actualizar producto' });
@@ -104,13 +147,11 @@ router.get('/', async (req, res) => {
   try {
     const whereClause = {};
     
-    // Filtrar productos variables si se especifica
     if (incluir_variables === 'false') {
       whereClause.es_variable = false;
     } else if (incluir_variables === 'true') {
       whereClause.es_variable = true;
     }
-    // Si no se especifica, traer todos
     
     const productos = await Producto.findAll({ 
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined 
