@@ -364,4 +364,160 @@ router.get('/test', async (req, res) => {
   }
 });
 
+// ✅ NUEVO: Reporte de productos por rubro con ambas listas de precios
+router.get('/productos-por-rubro', async (req, res) => {
+  try {
+    const { incluir_sin_stock, ordenar_por } = req.query;
+    
+    // Construir WHERE clause
+    let whereClause = '';
+    if (incluir_sin_stock !== 'true') {
+      whereClause = 'WHERE p.stock > 0';
+    }
+    
+    // Determinar ORDER BY
+    let orderBy = 'ORDER BY r.nombre ASC, p.nombre ASC';
+    if (ordenar_por === 'precio_asc') {
+      orderBy = 'ORDER BY r.nombre ASC, p.precio ASC';
+    } else if (ordenar_por === 'precio_desc') {
+      orderBy = 'ORDER BY r.nombre ASC, p.precio DESC';
+    } else if (ordenar_por === 'stock') {
+      orderBy = 'ORDER BY r.nombre ASC, p.stock DESC';
+    }
+
+    const query = `
+      SELECT 
+        r.nombre as rubro,
+        r.id_rubro,
+        p.codigo_barras,
+        p.nombre as producto,
+        p.precio as precio_lista1,
+        COALESCE(p.precio_lista2, ROUND(p.precio * 1.05 / 50, 0) * 50) as precio_lista2,
+        p.stock,
+        p.descripcion,
+        p.es_variable,
+        p.precio_base
+      FROM productos p
+      LEFT JOIN rubros r ON p.id_rubro = r.id_rubro
+      ${whereClause}
+      ${orderBy}
+    `;
+
+    console.log('📋 Ejecutando consulta productos-por-rubro:', query);
+    
+    const productos = await sequelize.query(query, { type: QueryTypes.SELECT });
+    
+    // Agrupar productos por rubro
+    const productosPorRubro = {};
+    let totalProductos = 0;
+    let valorInventarioLista1 = 0;
+    let valorInventarioLista2 = 0;
+    
+    productos.forEach(producto => {
+      const rubro = producto.rubro || 'Sin Rubro';
+      
+      if (!productosPorRubro[rubro]) {
+        productosPorRubro[rubro] = {
+          id_rubro: producto.id_rubro,
+          nombre: rubro,
+          productos: [],
+          totalProductos: 0,
+          valorRubroLista1: 0,
+          valorRubroLista2: 0
+        };
+      }
+      
+      const valorLista1 = (producto.precio_lista1 || 0) * (producto.stock || 0);
+      const valorLista2 = (producto.precio_lista2 || 0) * (producto.stock || 0);
+      
+      productosPorRubro[rubro].productos.push({
+        ...producto,
+        valorStockLista1: valorLista1,
+        valorStockLista2: valorLista2
+      });
+      
+      productosPorRubro[rubro].totalProductos += 1;
+      productosPorRubro[rubro].valorRubroLista1 += valorLista1;
+      productosPorRubro[rubro].valorRubroLista2 += valorLista2;
+      
+      totalProductos += 1;
+      valorInventarioLista1 += valorLista1;
+      valorInventarioLista2 += valorLista2;
+    });
+
+    const resultado = {
+      rubros: Object.values(productosPorRubro),
+      resumen: {
+        totalRubros: Object.keys(productosPorRubro).length,
+        totalProductos: totalProductos,
+        valorInventarioLista1: Math.round(valorInventarioLista1 * 100) / 100,
+        valorInventarioLista2: Math.round(valorInventarioLista2 * 100) / 100
+      },
+      fechaGeneracion: new Date().toISOString()
+    };
+
+    console.log('✅ Productos por rubro generado:', resultado.resumen);
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('❌ Error en productos-por-rubro:', error);
+    res.status(500).json({ 
+      error: 'Error al generar listado de productos por rubro',
+      details: error.message 
+    });
+  }
+});
+
+// ✅ NUEVO: Versión simplificada para impresión
+router.get('/productos-imprimir', async (req, res) => {
+  try {
+    const { lista_precios = '1' } = req.query;
+    
+    const query = `
+      SELECT 
+        COALESCE(r.nombre, 'Sin Rubro') as rubro,
+        p.codigo_barras,
+        p.nombre as producto,
+        p.precio as precio_lista1,
+        COALESCE(p.precio_lista2, ROUND(p.precio * 1.05 / 50, 0) * 50) as precio_lista2,
+        p.stock
+      FROM productos p
+      LEFT JOIN rubros r ON p.id_rubro = r.id_rubro
+      WHERE p.stock >= 0
+      ORDER BY r.nombre ASC, p.nombre ASC
+    `;
+
+    const productos = await sequelize.query(query, { type: QueryTypes.SELECT });
+    
+    // Agrupar por rubro para impresión
+    const rubros = {};
+    productos.forEach(producto => {
+      const nombreRubro = producto.rubro;
+      if (!rubros[nombreRubro]) {
+        rubros[nombreRubro] = [];
+      }
+      rubros[nombreRubro].push(producto);
+    });
+
+    const resultado = {
+      rubros: Object.keys(rubros).sort().map(nombre => ({
+        nombre,
+        productos: rubros[nombre]
+      })),
+      listaSeleccionada: lista_precios,
+      fechaImpresion: new Date().toLocaleDateString('es-AR'),
+      horaImpresion: new Date().toLocaleTimeString('es-AR')
+    };
+
+    res.json(resultado);
+
+  } catch (error) {
+    console.error('❌ Error en productos-imprimir:', error);
+    res.status(500).json({ 
+      error: 'Error al generar listado para impresión',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router;
