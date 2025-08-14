@@ -1,9 +1,6 @@
 // ✅ NUEVO ARCHIVO: backend/models/MovimientoCuentaCorriente.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
-const Cliente = require('./Cliente');
-const Ticket = require('./Ticket');
-const Usuario = require('./Usuario');
 
 const MovimientoCuentaCorriente = sequelize.define(
   'MovimientoCuentaCorriente',
@@ -17,7 +14,7 @@ const MovimientoCuentaCorriente = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: Cliente,
+        model: 'clientes', // ✅ Usar string para evitar referencias circulares
         key: 'id_cliente',
       },
     },
@@ -25,12 +22,12 @@ const MovimientoCuentaCorriente = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: Ticket,
+        model: 'tickets',
         key: 'id_ticket',
       },
     },
     tipo_movimiento: {
-      type: DataTypes.ENUM('venta', 'pago', 'entrega', 'ajuste'),
+      type: DataTypes.ENUM('venta', 'pago', 'entrega_parcial', 'ajuste'),
       allowNull: false,
     },
     monto: {
@@ -49,7 +46,7 @@ const MovimientoCuentaCorriente = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
       references: {
-        model: Usuario,
+        model: 'usuarios',
         key: 'id_usuario',
       },
     },
@@ -68,9 +65,14 @@ const MovimientoCuentaCorriente = sequelize.define(
   }
 );
 
-// ✅ ESTABLECER RELACIONES
+// ✅ EXPORTAR PRIMERO, ESTABLECER RELACIONES DESPUÉS
+module.exports = MovimientoCuentaCorriente;
+
+// ✅ ESTABLECER RELACIONES DESPUÉS DE EXPORTAR (evita referencias circulares)
+const Cliente = require('./Cliente');
+const Ticket = require('./Ticket');
+const Usuario = require('./Usuario');
+
 MovimientoCuentaCorriente.belongsTo(Cliente, { foreignKey: 'id_cliente', as: 'cliente' });
 MovimientoCuentaCorriente.belongsTo(Ticket, { foreignKey: 'id_ticket', as: 'ticket' });
 MovimientoCuentaCorriente.belongsTo(Usuario, { foreignKey: 'id_usuario_registro', as: 'usuario_registro' });
-
-module.exports = MovimientoCuentaCorriente;
