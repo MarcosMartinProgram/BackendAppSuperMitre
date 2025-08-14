@@ -72,9 +72,23 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ LOGGING DE REQUESTS (temporal para debug)
+// ✅ LOGGING MEJORADO DE REQUESTS
 app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.path} desde ${req.headers.origin || 'sin origin'}`);
+  const start = Date.now();
+  
+  console.log(`📨 ${req.method} ${req.path}`);
+  console.log(`   Origin: ${req.headers.origin || 'sin origin'}`);
+  console.log(`   User-Agent: ${req.headers['user-agent'] || 'sin user-agent'}`);
+  
+  // ✅ LOG CUANDO LA REQUEST TERMINE
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    const status = res.statusCode;
+    const statusIcon = status >= 400 ? '❌' : '✅';
+    
+    console.log(`${statusIcon} ${req.method} ${req.path} - ${status} (${duration}ms)`);
+  });
+  
   next();
 });
 
@@ -109,7 +123,24 @@ app.get('/api/test-cors', (req, res) => {
 // Verificar conexión a la base de datos
 sequelize
   .authenticate()
-  .then(() => console.log('✅ Conexión a la base de datos exitosa.'))
+  .then(async () => {
+    console.log('✅ Conexión a la base de datos exitosa.');
+    
+    // ✅ VERIFICAR TABLAS IMPORTANTES
+    try {
+      const tablas = await sequelize.getQueryInterface().showAllTables();
+      console.log('📊 Tablas disponibles:', tablas);
+      
+      if (tablas.includes('clientes')) {
+        const countClientes = await Cliente.count();
+        console.log(`👥 Total de clientes en la base de datos: ${countClientes}`);
+      } else {
+        console.log('⚠️  Tabla "clientes" no encontrada');
+      }
+    } catch (error) {
+      console.error('❌ Error al verificar tablas:', error.message);
+    }
+  })
   .catch((err) => console.error('❌ Error al conectar a la base de datos:', err));
 
 // Rutas principales

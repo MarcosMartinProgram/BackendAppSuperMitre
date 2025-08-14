@@ -9,9 +9,38 @@ const sequelize = require('../config/database');
 
 const router = express.Router();
 
+// ✅ RUTA DE PRUEBA PARA VERIFICAR QUE CLIENTES FUNCIONA
+router.get('/test', async (req, res) => {
+  try {
+    console.log('🧪 Test de ruta de clientes...');
+    
+    // Probar conexión a la base de datos
+    const count = await Cliente.count();
+    
+    res.json({
+      status: 'OK',
+      message: 'Ruta de clientes funcionando',
+      total_clientes: count,
+      timestamp: new Date().toISOString(),
+      database_connection: 'OK'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en test de clientes:', error);
+    res.status(500).json({
+      status: 'ERROR',
+      message: 'Error en la conexión',
+      error: error.message
+    });
+  }
+});
+
 // ✅ OBTENER TODOS LOS CLIENTES
 router.get('/', async (req, res) => {
   try {
+    console.log('📋 Iniciando obtención de clientes...');
+    
+    // ✅ MEJORAR LA QUERY PARA EVITAR PROBLEMAS
     const clientes = await Cliente.findAll({
       attributes: [
         'id_cliente', 
@@ -19,19 +48,48 @@ router.get('/', async (req, res) => {
         'email', 
         'telefono', 
         'direccion',
-        'saldo_cuenta_corriente',
-        'limite_credito',
+        [sequelize.fn('COALESCE', sequelize.col('saldo_cuenta_corriente'), 0), 'saldo_cuenta_corriente'],
+        [sequelize.fn('COALESCE', sequelize.col('limite_credito'), 0), 'limite_credito'],
         'es_cuenta_corriente',
         'fecha_creacion'
       ],
-      order: [['nombre', 'ASC']]
+      order: [['nombre', 'ASC']],
+      raw: false // ✅ Asegurar que devuelve objetos Sequelize
     });
     
-    console.log('✅ Clientes obtenidos:', clientes.length);
-    res.json(clientes);
+    // ✅ CONVERTIR A JSON PLANO PARA EVITAR PROBLEMAS DE SERIALIZACIÓN
+    const clientesJSON = clientes.map(cliente => ({
+      id_cliente: cliente.id_cliente,
+      nombre: cliente.nombre,
+      email: cliente.email,
+      telefono: cliente.telefono,
+      direccion: cliente.direccion,
+      saldo_cuenta_corriente: parseFloat(cliente.saldo_cuenta_corriente) || 0,
+      limite_credito: parseFloat(cliente.limite_credito) || 0,
+      es_cuenta_corriente: Boolean(cliente.es_cuenta_corriente),
+      fecha_creacion: cliente.fecha_creacion
+    }));
+    
+    console.log(`✅ ${clientesJSON.length} clientes obtenidos exitosamente`);
+    
+    // ✅ HEADERS EXPLÍCITOS
+    res.setHeader('Content-Type', 'application/json');
+    res.status(200).json(clientesJSON);
+    
   } catch (error) {
-    console.error('❌ Error al obtener clientes:', error);
-    res.status(500).json({ error: 'Error al obtener clientes' });
+    console.error('❌ Error detallado al obtener clientes:', {
+      message: error.message,
+      stack: error.stack,
+      sql: error.sql || 'No SQL'
+    });
+    
+    // ✅ RESPUESTA DE ERROR MÁS ESPECÍFICA
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      message: 'No se pudieron obtener los clientes',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
