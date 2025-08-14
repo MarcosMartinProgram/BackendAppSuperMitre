@@ -389,4 +389,72 @@ router.post('/:id/saldar', async (req, res) => {
   }
 });
 
+// ✅ REGISTRAR ENTREGA PARCIAL
+router.post('/:id/entrega-parcial', async (req, res) => {
+  const transaction = await sequelize.transaction();
+
+  try {
+    const { id } = req.params;
+    const { monto, descripcion = '', id_usuario_registro, id_ticket = null } = req.body;
+
+    if (!monto || monto <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+    }
+
+    const cliente = await Cliente.findByPk(id, { transaction });
+    if (!cliente) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    if (!cliente.es_cuenta_corriente) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Este cliente no maneja cuenta corriente' });
+    }
+
+    const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente);
+    const saldoNuevo = saldoAnterior - parseFloat(monto); // Entrega reduce el saldo
+
+    // Verificar que el monto no sea mayor al saldo
+    if (saldoNuevo < 0) {
+      await transaction.rollback();
+      return res.status(400).json({ 
+        error: 'El monto de entrega no puede ser mayor al saldo actual',
+        saldo_disponible: saldoAnterior 
+      });
+    }
+
+    // Actualizar saldo del cliente
+    await cliente.update({
+      saldo_cuenta_corriente: saldoNuevo
+    }, { transaction });
+
+    // Registrar movimiento
+    await MovimientoCuentaCorriente.create({
+      id_cliente: parseInt(id),
+      id_ticket: id_ticket || null,
+      tipo_movimiento: 'entrega_parcial',
+      monto: parseFloat(monto),
+      descripcion: descripcion || `Entrega parcial`,
+      saldo_anterior: saldoAnterior,
+      saldo_actual: saldoNuevo,
+      id_usuario_registro: id_usuario_registro || null
+    }, { transaction });
+
+    await transaction.commit();
+
+    console.log(`💵 Entrega parcial registrada para ${cliente.nombre}: $${monto}`);
+    res.json({
+      message: 'Entrega parcial registrada exitosamente',
+      saldo_anterior: saldoAnterior,
+      saldo_actual: saldoNuevo
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    console.error('❌ Error al registrar entrega parcial:', error);
+    res.status(500).json({ error: 'Error al registrar la entrega parcial' });
+  }
+});
+
 module.exports = router;

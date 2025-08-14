@@ -134,6 +134,25 @@ app.get("/pending", (req, res) => {
   res.send("Pago pendiente");
 });
 
+// ✅ ESTABLECER TODAS LAS RELACIONES DESPUÉS DE IMPORTAR TODOS LOS MODELOS
+const Cliente = require('./models/Cliente');
+const Ticket = require('./models/Ticket');
+const MovimientoCuentaCorriente = require('./models/MovimientoCuentaCorriente');
+const Usuario = require('./models/Usuario');
+
+// Establecer relaciones
+Cliente.hasMany(Ticket, { foreignKey: 'id_cliente', as: 'tickets' });
+Cliente.hasMany(MovimientoCuentaCorriente, { foreignKey: 'id_cliente', as: 'movimientos' });
+
+Ticket.belongsTo(Cliente, { foreignKey: 'id_cliente', as: 'cliente' });
+Ticket.belongsTo(Usuario, { foreignKey: 'id_vendedor', as: 'vendedor' });
+
+MovimientoCuentaCorriente.belongsTo(Cliente, { foreignKey: 'id_cliente', as: 'cliente' });
+MovimientoCuentaCorriente.belongsTo(Ticket, { foreignKey: 'id_ticket', as: 'ticket' });
+MovimientoCuentaCorriente.belongsTo(Usuario, { foreignKey: 'id_usuario_registro', as: 'usuario_registro' });
+
+Usuario.hasMany(Ticket, { foreignKey: 'id_vendedor', as: 'tickets_vendidos' });
+
 // Sincronizar base de datos
 sequelize.sync({ alter: true })
   .then(() => console.log('✅ Modelos sincronizados con la base de datos.'))
