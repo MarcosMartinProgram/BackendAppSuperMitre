@@ -1,7 +1,7 @@
 // models/Cliente.js
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/database');
-const Usuario = require('./Usuario'); // Si hay relación entre clientes y usuarios
+const Usuario = require('./Usuario');
 
 const Cliente = sequelize.define(
   'Cliente',
@@ -18,6 +18,7 @@ const Cliente = sequelize.define(
     email: {
       type: DataTypes.STRING,
       allowNull: false,
+      unique: true,
     },
     direccion: {
       type: DataTypes.STRING,
@@ -27,9 +28,25 @@ const Cliente = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    saldo_cuenta_corriente: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.00,
+    },
+    limite_credito: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.00,
+    },
+    es_cuenta_corriente: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    fecha_creacion: {
+      type: DataTypes.DATE,
+      defaultValue: DataTypes.NOW,
+    },
     id_usuario: {
       type: DataTypes.INTEGER,
-      allowNull: true, // Relación opcional con usuario
+      allowNull: true,
       references: {
         model: Usuario,
         key: 'id_usuario',
@@ -42,7 +59,6 @@ const Cliente = sequelize.define(
   }
 );
 
-// Establecer relación (si aplica)
 Cliente.belongsTo(Usuario, { foreignKey: 'id_usuario', as: 'usuario' });
 
 module.exports = Cliente;
