@@ -23,13 +23,25 @@ const PORT = process.env.PORT || 5000;
 
 // ✅ CONFIGURACIÓN CORS CORREGIDA
 const corsOptions = {
-  origin: [
-    'http://localhost:3000',           // Desarrollo local
-    'https://www.supermitre.com.ar',   // Tu dominio con www
-    'https://supermitre.com.ar',       // Tu dominio sin www
-    'https://cacmarcos.alwaysdata.net' // Tu API
-  ],
-  credentials: true,
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      'http://localhost:3000',           // Desarrollo local
+      'https://www.supermitre.com.ar',   // Tu dominio con www
+      'https://supermitre.com.ar',       // Tu dominio sin www
+      'https://cacmarcos.alwaysdata.net' // Tu API
+    ];
+    
+    // ✅ PERMITIR REQUESTS SIN ORIGIN (como Postman, apps móviles)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('❌ CORS blocked para origin:', origin);
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true, // ✅ MANTENER CREDENCIALES
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Origin',
@@ -38,13 +50,15 @@ const corsOptions = {
     'Accept',
     'Authorization',
     'Cache-Control'
-  ]
+  ],
+  preflightContinue: false, // ✅ AGREGADO
+  optionsSuccessStatus: 200 // ✅ AGREGADO para navegadores legacy
 };
 
-// ✅ APLICAR CORS CON OPCIONES
+// ✅ APLICAR CORS PRIMERO
 app.use(cors(corsOptions));
 
-// ✅ MIDDLEWARE ADICIONAL PARA CORS MANUAL
+// ✅ MIDDLEWARE MEJORADO PARA MANEJAR PREFLIGHT
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   const allowedOrigins = [
@@ -54,17 +68,18 @@ app.use((req, res, next) => {
     'https://cacmarcos.alwaysdata.net'
   ];
 
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
+  // ✅ CONFIGURAR HEADERS CORS EXPLÍCITAMENTE
+  if (!origin || allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
   }
-  
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  // ✅ MANEJAR PREFLIGHT REQUESTS
+  // ✅ MANEJAR PREFLIGHT REQUESTS MÁS ESPECÍFICAMENTE
   if (req.method === 'OPTIONS') {
     console.log('🔄 Preflight request desde:', origin);
+    console.log('🔄 Para ruta:', req.path);
     res.status(200).end();
     return;
   }
