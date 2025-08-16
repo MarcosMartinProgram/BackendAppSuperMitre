@@ -35,6 +35,68 @@ router.get('/test', async (req, res) => {
     });
   }
 });
+// ✅ NUEVA RUTA DE TEST PARA VERIFICAR MODELOS
+router.get('/test-models', async (req, res) => {
+  try {
+    console.log('🧪 Testeando modelos y relaciones...');
+    
+    // Test Cliente
+    const clienteCount = await Cliente.count();
+    console.log(`👥 Clientes en DB: ${clienteCount}`);
+    
+    // Test Ticket
+    const ticketCount = await Ticket.count();
+    console.log(`🎫 Tickets en DB: ${ticketCount}`);
+    
+    // Test MovimientoCuentaCorriente
+    const movimientoCount = await MovimientoCuentaCorriente.count();
+    console.log(`📊 Movimientos en DB: ${movimientoCount}`);
+    
+    // Test específico: buscar un cliente con cuenta corriente
+    const clienteCtaCte = await Cliente.findOne({
+      where: { es_cuenta_corriente: true }
+    });
+    
+    // Test específico: buscar un ticket sin cliente
+    const ticketSinCliente = await Ticket.findOne({
+      where: { id_cliente: null }
+    });
+    
+    res.json({
+      status: 'OK',
+      counts: {
+        clientes: clienteCount,
+        tickets: ticketCount,
+        movimientos: movimientoCount
+      },
+      samples: {
+        cliente_cuenta_corriente: clienteCtaCte ? {
+          id: clienteCtaCte.id_cliente,
+          nombre: clienteCtaCte.nombre,
+          saldo: clienteCtaCte.saldo_cuenta_corriente
+        } : null,
+        ticket_sin_cliente: ticketSinCliente ? {
+          id: ticketSinCliente.id_ticket,
+          total: ticketSinCliente.total,
+          fecha: ticketSinCliente.fecha
+        } : null
+      },
+      database_tables: {
+        Cliente: 'OK',
+        Ticket: 'OK',
+        MovimientoCuentaCorriente: 'OK'
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Error en test de modelos:', error);
+    res.status(500).json({
+      error: error.message,
+      name: error.name,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
 
 // ✅ BUSCAR CLIENTE POR NOMBRE O EMAIL
 router.get('/buscar', async (req, res) => {
@@ -588,87 +650,181 @@ router.post('/:id/entrega-parcial', async (req, res) => {
   }
 });
 
-// ✅ CORREGIR RUTA: Asociar ticket existente a cuenta corriente
+// ✅ RUTA CORREGIDA CON DEBUGGING DETALLADO: Asociar ticket existente a cuenta corriente
 router.post('/:id/asociar-ticket', async (req, res) => {
+  let transaction = null;
+  
   try {
     const { id } = req.params;
     const { id_ticket, descripcion } = req.body;
     
-    console.log(`🔗 Asociando ticket ${id_ticket} al cliente ${id}`);
+    console.log(`🔗 === INICIANDO ASOCIACIÓN DE TICKET ===`);
+    console.log(`📋 Cliente ID: ${id}`);
+    console.log(`🎫 Ticket ID: ${id_ticket}`);
+    console.log(`📝 Descripción: ${descripcion || 'Sin descripción'}`);
     
-    // ✅ VERIFICAR QUE EL CLIENTE EXISTE Y TIENE CUENTA CORRIENTE
+    // ✅ VALIDAR PARÁMETROS
+    if (!id || !id_ticket) {
+      return res.status(400).json({ 
+        error: 'Cliente ID y Ticket ID son requeridos',
+        received: { id, id_ticket }
+      });
+    }
+    
+    // ✅ PASO 1: VERIFICAR QUE EL CLIENTE EXISTE Y TIENE CUENTA CORRIENTE
+    console.log(`👤 Paso 1: Buscando cliente ${id}...`);
     const cliente = await Cliente.findByPk(id);
     if (!cliente) {
+      console.log(`❌ Cliente ${id} no encontrado`);
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
     
+    console.log(`✅ Cliente encontrado: ${cliente.nombre}`);
+    console.log(`💰 Saldo actual: $${cliente.saldo_cuenta_corriente || 0}`);
+    console.log(`🏪 Es cuenta corriente: ${cliente.es_cuenta_corriente}`);
+    
     if (!cliente.es_cuenta_corriente) {
+      console.log(`❌ Cliente no tiene cuenta corriente habilitada`);
       return res.status(400).json({ error: 'El cliente no tiene habilitada la cuenta corriente' });
     }
     
-    // ✅ BUSCAR EL TICKET - USAR SOLO CAMPOS QUE EXISTEN
+    // ✅ PASO 2: BUSCAR EL TICKET
+    console.log(`🎫 Paso 2: Buscando ticket ${id_ticket}...`);
     const ticket = await Ticket.findByPk(id_ticket);
     if (!ticket) {
+      console.log(`❌ Ticket ${id_ticket} no encontrado`);
       return res.status(404).json({ error: 'Ticket no encontrado' });
     }
     
-    // ✅ VERIFICAR QUE EL TICKET NO ESTÉ YA ASOCIADO
+    console.log(`✅ Ticket encontrado:`);
+    console.log(`  - ID: ${ticket.id_ticket}`);
+    console.log(`  - Total: $${ticket.total}`);
+    console.log(`  - Cliente actual: ${ticket.id_cliente || 'NULL'}`);
+    console.log(`  - Tipo pago: ${ticket.tipo_pago || 'NULL'}`);
+    console.log(`  - Fecha: ${ticket.fecha}`);
+    
+    // ✅ PASO 3: VERIFICAR QUE EL TICKET NO ESTÉ YA ASOCIADO
     if (ticket.id_cliente) {
+      console.log(`❌ Ticket ya asociado al cliente ${ticket.id_cliente}`);
       return res.status(400).json({ 
         error: `El ticket ya está asociado al cliente ${ticket.id_cliente}` 
       });
     }
     
-    // ✅ INICIAR TRANSACCIÓN
-    const transaction = await sequelize.transaction();
+    // ✅ PASO 4: INICIAR TRANSACCIÓN
+    console.log(`🔄 Paso 4: Iniciando transacción...`);
+    transaction = await sequelize.transaction();
     
-    try {
-      // ✅ ACTUALIZAR EL TICKET
-      await ticket.update({
-        id_cliente: id,
-        tipo_pago: 'cuenta_corriente'
-      }, { transaction });
-      
-      // ✅ CREAR MOVIMIENTO EN CUENTA CORRIENTE
-      await MovimientoCuentaCorriente.create({
-        id_cliente: id,
-        id_ticket: id_ticket,
-        tipo_movimiento: 'venta',
-        monto: parseFloat(ticket.total),
-        descripcion: descripcion || `Venta asociada - Ticket #${id_ticket}`, // ✅ USAR id_ticket
-        fecha: ticket.fecha || new Date(),
-        saldo_anterior: parseFloat(cliente.saldo_cuenta_corriente || 0),
-        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente || 0) + parseFloat(ticket.total)
-      }, { transaction });
-      
-      // ✅ ACTUALIZAR SALDO DEL CLIENTE
-      const nuevoSaldo = parseFloat(cliente.saldo_cuenta_corriente || 0) + parseFloat(ticket.total);
-      await cliente.update({
-        saldo_cuenta_corriente: nuevoSaldo
-      }, { transaction });
-      
-      await transaction.commit();
-      
-      console.log(`✅ Ticket ${id_ticket} asociado exitosamente al cliente ${id}`);
-      console.log(`💰 Nuevo saldo del cliente: $${nuevoSaldo}`);
-      
-      res.json({
-        message: 'Ticket asociado exitosamente',
+    // ✅ PASO 5: ACTUALIZAR EL TICKET
+    console.log(`📝 Paso 5: Actualizando ticket...`);
+    await ticket.update({
+      id_cliente: parseInt(id),
+      tipo_pago: 'cuenta_corriente'
+    }, { transaction });
+    
+    console.log(`✅ Ticket actualizado exitosamente`);
+    
+    // ✅ PASO 6: PREPARAR DATOS PARA MOVIMIENTO
+    const montoTicket = parseFloat(ticket.total);
+    const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente || 0);
+    const nuevoSaldo = saldoAnterior + montoTicket;
+    
+    console.log(`💰 Paso 6: Calculando saldos...`);
+    console.log(`  - Monto ticket: $${montoTicket}`);
+    console.log(`  - Saldo anterior: $${saldoAnterior}`);
+    console.log(`  - Nuevo saldo: $${nuevoSaldo}`);
+    
+    // ✅ PASO 7: CREAR MOVIMIENTO EN CUENTA CORRIENTE
+    console.log(`📊 Paso 7: Creando movimiento de cuenta corriente...`);
+    const nuevoMovimiento = await MovimientoCuentaCorriente.create({
+      id_cliente: parseInt(id),
+      id_ticket: parseInt(id_ticket),
+      tipo_movimiento: 'venta',
+      monto: montoTicket,
+      descripcion: descripcion || `Venta asociada - Ticket #${id_ticket}`,
+      fecha: ticket.fecha || new Date(),
+      saldo_anterior: saldoAnterior,
+      saldo_actual: nuevoSaldo
+    }, { transaction });
+    
+    console.log(`✅ Movimiento creado con ID: ${nuevoMovimiento.id_movimiento}`);
+    
+    // ✅ PASO 8: ACTUALIZAR SALDO DEL CLIENTE
+    console.log(`👤 Paso 8: Actualizando saldo del cliente...`);
+    await cliente.update({
+      saldo_cuenta_corriente: nuevoSaldo
+    }, { transaction });
+    
+    console.log(`✅ Saldo del cliente actualizado`);
+    
+    // ✅ PASO 9: CONFIRMAR TRANSACCIÓN
+    console.log(`✅ Paso 9: Confirmando transacción...`);
+    await transaction.commit();
+    transaction = null; // Marcar como completada
+    
+    console.log(`🎉 === ASOCIACIÓN COMPLETADA EXITOSAMENTE ===`);
+    console.log(`✅ Ticket ${id_ticket} asociado al cliente ${cliente.nombre}`);
+    console.log(`💰 Nuevo saldo: $${nuevoSaldo}`);
+    
+    res.json({
+      success: true,
+      message: 'Ticket asociado exitosamente',
+      data: {
         ticket_id: id_ticket,
-        monto: parseFloat(ticket.total),
-        nuevo_saldo: nuevoSaldo
-      });
-      
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+        cliente_nombre: cliente.nombre,
+        monto: montoTicket,
+        saldo_anterior: saldoAnterior,
+        nuevo_saldo: nuevoSaldo,
+        movimiento_id: nuevoMovimiento.id_movimiento
+      }
+    });
     
   } catch (error) {
-    console.error('❌ Error al asociar ticket:', error);
+    // ✅ ROLLBACK SI HAY TRANSACCIÓN ACTIVA
+    if (transaction) {
+      console.log(`🔄 Realizando rollback de transacción...`);
+      await transaction.rollback();
+    }
+    
+    console.error(`❌ === ERROR EN ASOCIACIÓN DE TICKET ===`);
+    console.error(`🔍 Tipo de error: ${error.name}`);
+    console.error(`📝 Mensaje: ${error.message}`);
+    console.error(`📍 Stack trace:`, error.stack);
+    
+    // ✅ ERRORES ESPECÍFICOS DE SEQUELIZE
+    if (error.name === 'SequelizeValidationError') {
+      console.error(`🚫 Errores de validación:`, error.errors);
+      return res.status(400).json({ 
+        error: 'Error de validación',
+        details: error.errors.map(e => e.message),
+        field_errors: error.errors
+      });
+    }
+    
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      console.error(`🔗 Error de clave foránea: ${error.fields}`);
+      return res.status(400).json({ 
+        error: 'Error de referencia de datos',
+        details: `Problema con campos: ${error.fields?.join(', ')}`,
+        constraint: error.constraint
+      });
+    }
+    
+    if (error.name === 'SequelizeDatabaseError') {
+      console.error(`🗄️ Error de base de datos SQL:`, error.sql);
+      return res.status(500).json({ 
+        error: 'Error de base de datos',
+        details: error.message,
+        sql_error: process.env.NODE_ENV === 'development' ? error.sql : undefined
+      });
+    }
+    
+    // ✅ ERROR GENÉRICO
     res.status(500).json({ 
-      error: 'Error al asociar ticket',
-      details: error.message 
+      error: 'Error interno al asociar ticket',
+      details: error.message,
+      type: error.name,
+      timestamp: new Date().toISOString()
     });
   }
 });
