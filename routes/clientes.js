@@ -73,28 +73,25 @@ router.get('/buscar', async (req, res) => {
   }
 });
 
-// ✅ NUEVA RUTA: Obtener tickets disponibles para asociar
+// ✅ RUTA CORREGIDA: Obtener tickets disponibles para asociar
 router.get('/tickets-disponibles', async (req, res) => {
   try {
     console.log('🔍 Obteniendo tickets disponibles para asociar...');
     
-    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO
+    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO - SOLO CAMPOS QUE EXISTEN
     const tickets = await Ticket.findAll({
       where: {
-        id_cliente: null, // Solo tickets sin cliente
-        total: {
-          [Op.gt]: 0 // Solo tickets con monto mayor a 0
-        }
+        id_cliente: null // Solo tickets sin cliente
       },
       order: [['fecha', 'DESC']],
-      limit: 100, // Limitar resultados
+      limit: 100,
       attributes: [
         'id_ticket', 
-        'numero_ticket', 
         'total', 
         'fecha', 
         'tipo_pago', 
         'productos'
+        // ✅ REMOVIDO: 'numero_ticket' porque no existe
       ]
     });
     
@@ -117,7 +114,7 @@ router.get('/tickets-disponibles', async (req, res) => {
       
       return {
         id_ticket: ticket.id_ticket,
-        numero_ticket: ticket.numero_ticket || ticket.id_ticket,
+        numero_ticket: ticket.id_ticket, // ✅ USAR id_ticket como número
         total: parseFloat(ticket.total),
         fecha: ticket.fecha,
         tipo_pago: ticket.tipo_pago || 'contado',
@@ -591,7 +588,7 @@ router.post('/:id/entrega-parcial', async (req, res) => {
   }
 });
 
-// ✅ NUEVA RUTA: Asociar ticket existente a cuenta corriente
+// ✅ CORREGIR RUTA: Asociar ticket existente a cuenta corriente
 router.post('/:id/asociar-ticket', async (req, res) => {
   try {
     const { id } = req.params;
@@ -609,7 +606,7 @@ router.post('/:id/asociar-ticket', async (req, res) => {
       return res.status(400).json({ error: 'El cliente no tiene habilitada la cuenta corriente' });
     }
     
-    // ✅ BUSCAR EL TICKET
+    // ✅ BUSCAR EL TICKET - USAR SOLO CAMPOS QUE EXISTEN
     const ticket = await Ticket.findByPk(id_ticket);
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket no encontrado' });
@@ -638,7 +635,7 @@ router.post('/:id/asociar-ticket', async (req, res) => {
         id_ticket: id_ticket,
         tipo_movimiento: 'venta',
         monto: parseFloat(ticket.total),
-        descripcion: descripcion || `Venta asociada - Ticket #${id_ticket}`,
+        descripcion: descripcion || `Venta asociada - Ticket #${id_ticket}`, // ✅ USAR id_ticket
         fecha: ticket.fecha || new Date(),
         saldo_anterior: parseFloat(cliente.saldo_cuenta_corriente || 0),
         saldo_actual: parseFloat(cliente.saldo_cuenta_corriente || 0) + parseFloat(ticket.total)
