@@ -137,12 +137,12 @@ router.get('/tickets-disponibles', async (req, res) => {
   }
 });
 
-// ✅ OBTENER TODOS LOS CLIENTES
+// ✅ OBTENER TODOS LOS CLIENTES - VERSIÓN SIMPLIFICADA
 router.get('/', async (req, res) => {
   try {
     console.log('📋 Iniciando obtención de clientes...');
     
-    // ✅ MEJORAR LA QUERY PARA EVITAR PROBLEMAS
+    // ✅ CONSULTA SIMPLIFICADA SIN FUNCIONES COMPLEJAS
     const clientes = await Cliente.findAll({
       attributes: [
         'id_cliente', 
@@ -150,46 +150,43 @@ router.get('/', async (req, res) => {
         'email', 
         'telefono', 
         'direccion',
-        [sequelize.fn('COALESCE', sequelize.col('saldo_cuenta_corriente'), 0), 'saldo_cuenta_corriente'],
-        [sequelize.fn('COALESCE', sequelize.col('limite_credito'), 0), 'limite_credito'],
+        'saldo_cuenta_corriente',
+        'limite_credito',
         'es_cuenta_corriente',
         'fecha_creacion'
       ],
       order: [['nombre', 'ASC']],
-      raw: false // ✅ Asegurar que devuelve objetos Sequelize
+      raw: true // ✅ Devolver objetos planos directamente
     });
     
-    // ✅ CONVERTIR A JSON PLANO PARA EVITAR PROBLEMAS DE SERIALIZACIÓN
-    const clientesJSON = clientes.map(cliente => ({
+    // ✅ FORMATEAR DATOS PARA ASEGURAR TIPOS CORRECTOS
+    const clientesFormateados = clientes.map(cliente => ({
       id_cliente: cliente.id_cliente,
-      nombre: cliente.nombre,
-      email: cliente.email,
-      telefono: cliente.telefono,
-      direccion: cliente.direccion,
-      saldo_cuenta_corriente: parseFloat(cliente.saldo_cuenta_corriente) || 0,
-      limite_credito: parseFloat(cliente.limite_credito) || 0,
+      nombre: cliente.nombre || '',
+      email: cliente.email || '',
+      telefono: cliente.telefono || '',
+      direccion: cliente.direccion || '',
+      saldo_cuenta_corriente: parseFloat(cliente.saldo_cuenta_corriente || 0),
+      limite_credito: parseFloat(cliente.limite_credito || 0),
       es_cuenta_corriente: Boolean(cliente.es_cuenta_corriente),
       fecha_creacion: cliente.fecha_creacion
     }));
     
-    console.log(`✅ ${clientesJSON.length} clientes obtenidos exitosamente`);
+    console.log(`✅ ${clientesFormateados.length} clientes obtenidos exitosamente`);
     
-    // ✅ HEADERS EXPLÍCITOS
-    res.setHeader('Content-Type', 'application/json');
-    res.status(200).json(clientesJSON);
+    res.json(clientesFormateados);
     
   } catch (error) {
-    console.error('❌ Error detallado al obtener clientes:', {
-      message: error.message,
-      stack: error.stack,
-      sql: error.sql || 'No SQL'
-    });
+    console.error('❌ Error al obtener clientes:', error);
     
-    // ✅ RESPUESTA DE ERROR MÁS ESPECÍFICA
+    // ✅ RESPUESTA DE ERROR DETALLADA
     res.status(500).json({ 
-      error: 'Error interno del servidor',
-      message: 'No se pudieron obtener los clientes',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      error: 'Error al obtener clientes',
+      message: error.message,
+      details: {
+        name: error.name,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       timestamp: new Date().toISOString()
     });
   }
