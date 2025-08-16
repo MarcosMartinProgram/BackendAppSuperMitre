@@ -559,4 +559,153 @@ router.get('/:id/tickets-pendientes', async (req, res) => {
   }
 });
 
+// ✅ NUEVA RUTA: Asociar ticket existente a cuenta corriente
+router.post('/:id/asociar-ticket', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { id_ticket, descripcion } = req.body;
+    
+    console.log(`🔗 Asociando ticket ${id_ticket} al cliente ${id}`);
+    
+    // ✅ VERIFICAR QUE EL CLIENTE EXISTE Y TIENE CUENTA CORRIENTE
+    const cliente = await Cliente.findByPk(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+    
+    if (!cliente.es_cuenta_corriente) {
+      return res.status(400).json({ error: 'El cliente no tiene habilitada la cuenta corriente' });
+    }
+    
+    // ✅ BUSCAR EL TICKET
+    const ticket = await Ticket.findByPk(id_ticket);
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket no encontrado' });
+    }
+    
+    // ✅ VERIFICAR QUE EL TICKET NO ESTÉ YA ASOCIADO
+    if (ticket.id_cliente) {
+      return res.status(400).json({ 
+        error: `El ticket ya está asociado al cliente ${ticket.id_cliente}` 
+      });
+    }
+    
+    // ✅ INICIAR TRANSACCIÓN
+    const transaction = await sequelize.transaction();
+    
+    try {
+      // ✅ ACTUALIZAR EL TICKET
+      await ticket.update({
+        id_cliente: id,
+        tipo_pago: 'cuenta_corriente'
+      }, { transaction });
+      
+      // ✅ CREAR MOVIMIENTO EN CUENTA CORRIENTE
+      await MovimientoCuentaCorriente.create({
+        id_cliente: id,
+        id_ticket: id_ticket,
+        tipo_movimiento: 'venta',
+        monto: parseFloat(ticket.total),
+        descripcion: descripcion || `Venta asociada - Ticket #${id_ticket}`,
+        fecha: ticket.fecha || new Date(),
+        saldo_anterior: parseFloat(cliente.saldo_cuenta_corriente || 0),
+        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente || 0) + parseFloat(ticket.total)
+      }, { transaction });
+      
+      // ✅ ACTUALIZAR SALDO DEL CLIENTE
+      const nuevoSaldo = parseFloat(cliente.saldo_cuenta_corriente || 0) + parseFloat(ticket.total);
+      await cliente.update({
+        saldo_cuenta_corriente: nuevoSaldo
+      }, { transaction });
+      
+      await transaction.commit();
+      
+      console.log(`✅ Ticket ${id_ticket} asociado exitosamente al cliente ${id}`);
+      console.log(`💰 Nuevo saldo del cliente: $${nuevoSaldo}`);
+      
+      res.json({
+        message: 'Ticket asociado exitosamente',
+        ticket_id: id_ticket,
+        monto: parseFloat(ticket.total),
+        nuevo_saldo: nuevoSaldo
+      });
+      
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+    
+  } catch (error) {
+    console.error('❌ Error al asociar ticket:', error);
+    res.status(500).json({ 
+      error: 'Error al asociar ticket',
+      details: error.message 
+    });
+  }
+});
+
+// ✅ NUEVA RUTA: Obtener tickets disponibles para asociar
+router.get('/tickets-disponibles', async (req, res) => {
+  try {
+    console.log('🔍 Obteniendo tickets disponibles para asociar...');
+    
+    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO
+    const tickets = await Ticket.findAll({
+      where: {
+        id_cliente: null, // Solo tickets sin cliente
+        total: {
+          [Op.gt]: 0 // Solo tickets con monto mayor a 0
+        }
+      },
+      order: [['fecha', 'DESC']],
+      limit: 100, // Limitar resultados
+      attributes: [
+        'id_ticket', 
+        'numero_ticket', 
+        'total', 
+        'fecha', 
+        'tipo_pago', 
+        'productos'
+      ]
+    });
+    
+    // ✅ FORMATEAR DATOS PARA EL FRONTEND
+    const ticketsFormateados = tickets.map(ticket => {
+      let productosInfo = 'Sin productos';
+      try {
+        const productos = JSON.parse(ticket.productos);
+        if (Array.isArray(productos) && productos.length > 0) {
+          productosInfo = productos.slice(0, 2)
+            .map(p => p.nombre)
+            .join(', ');
+          if (productos.length > 2) {
+            productosInfo += `... (+${productos.length - 2} más)`;
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}`);
+      }
+      
+      return {
+        id_ticket: ticket.id_ticket,
+        numero_ticket: ticket.numero_ticket || ticket.id_ticket,
+        total: parseFloat(ticket.total),
+        fecha: ticket.fecha,
+        tipo_pago: ticket.tipo_pago || 'contado',
+        productos_info: productosInfo
+      };
+    });
+    
+    console.log(`✅ ${ticketsFormateados.length} tickets disponibles encontrados`);
+    res.json(ticketsFormateados);
+    
+  } catch (error) {
+    console.error('❌ Error al obtener tickets disponibles:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener tickets disponibles',
+      details: error.message 
+    });
+  }
+});
+
 module.exports = router;
