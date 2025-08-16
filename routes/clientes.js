@@ -6,7 +6,7 @@ const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente')
 const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const Ticket = require('../models/Ticket');
-const { sequelize } = require('../config/database');
+const sequelize = require('../config/database');
 
 const router = express.Router();
 
