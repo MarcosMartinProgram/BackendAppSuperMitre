@@ -516,22 +516,41 @@ router.post('/:id/entrega-parcial', async (req, res) => {
   }
 });
 
-// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE
+// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE - VERSIÓN CORREGIDA
 router.get('/:id/tickets-pendientes', async (req, res) => {
   try {
     const { id } = req.params;
     
     console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
     
-    // Buscar tickets que contribuyeron al saldo actual
-    const tickets = await Ticket.findAll({
+    // ✅ PRIMERA OPCIÓN: Buscar movimientos de venta del cliente
+    const movimientos = await MovimientoCuentaCorriente.findAll({
       where: {
         id_cliente: id,
-        // Puedes agregar condiciones adicionales si tienes un campo de estado
+        tipo_movimiento: 'venta'
       },
+      include: [
+        {
+          model: Ticket,
+          as: 'ticket',
+          attributes: ['id_ticket', 'numero_ticket', 'total', 'fecha', 'tipo_pago'],
+          required: false
+        }
+      ],
       order: [['fecha', 'DESC']],
-      attributes: ['id_ticket', 'numero_ticket', 'total', 'fecha', 'metodo_pago']
+      limit: 50
     });
+    
+    // Extraer tickets de los movimientos
+    const tickets = movimientos
+      .filter(mov => mov.ticket) // Solo movimientos que tienen ticket asociado
+      .map(mov => ({
+        id_ticket: mov.ticket.id_ticket,
+        numero_ticket: mov.ticket.numero_ticket || mov.ticket.id_ticket,
+        total: parseFloat(mov.monto), // Usar el monto del movimiento
+        fecha: mov.fecha,
+        tipo_pago: mov.ticket.tipo_pago || 'cuenta_corriente'
+      }));
     
     console.log(`✅ ${tickets.length} tickets encontrados para cliente ${id}`);
     res.json(tickets);
