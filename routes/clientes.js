@@ -516,43 +516,38 @@ router.post('/:id/entrega-parcial', async (req, res) => {
   }
 });
 
-// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE - VERSIÓN CORREGIDA
+// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE - SOLUCIÓN CORREGIDA
 router.get('/:id/tickets-pendientes', async (req, res) => {
   try {
     const { id } = req.params;
     
     console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
     
-    // ✅ PRIMERA OPCIÓN: Buscar movimientos de venta del cliente
+    // ✅ BUSCAR DIRECTAMENTE EN MOVIMIENTOS DE VENTA
     const movimientos = await MovimientoCuentaCorriente.findAll({
       where: {
         id_cliente: id,
         tipo_movimiento: 'venta'
       },
-      include: [
-        {
-          model: Ticket,
-          as: 'ticket',
-          attributes: ['id_ticket', 'numero_ticket', 'total', 'fecha', 'tipo_pago'],
-          required: false
-        }
-      ],
       order: [['fecha', 'DESC']],
       limit: 50
     });
     
-    // Extraer tickets de los movimientos
-    const tickets = movimientos
-      .filter(mov => mov.ticket) // Solo movimientos que tienen ticket asociado
-      .map(mov => ({
-        id_ticket: mov.ticket.id_ticket,
-        numero_ticket: mov.ticket.numero_ticket || mov.ticket.id_ticket,
-        total: parseFloat(mov.monto), // Usar el monto del movimiento
-        fecha: mov.fecha,
-        tipo_pago: mov.ticket.tipo_pago || 'cuenta_corriente'
-      }));
+    console.log(`📊 Movimientos encontrados:`, movimientos.length);
     
-    console.log(`✅ ${tickets.length} tickets encontrados para cliente ${id}`);
+    // ✅ CONVERTIR MOVIMIENTOS A FORMATO DE TICKETS
+    const tickets = movimientos.map(mov => ({
+      id_ticket: mov.id_ticket || `MOV-${mov.id_movimiento}`,
+      numero_ticket: mov.id_ticket || mov.id_movimiento,
+      total: parseFloat(mov.monto),
+      fecha: mov.fecha,
+      tipo_pago: 'cuenta_corriente',
+      descripcion: mov.descripcion
+    }));
+    
+    console.log(`✅ ${tickets.length} tickets simulados creados para cliente ${id}`);
+    console.log(`📋 Datos enviados:`, tickets);
+    
     res.json(tickets);
     
   } catch (error) {
