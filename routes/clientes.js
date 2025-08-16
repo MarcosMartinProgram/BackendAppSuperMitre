@@ -5,6 +5,7 @@ const Cliente = require('../models/Cliente');
 const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente');
 const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
+const Ticket = require('../models/Ticket');
 const sequelize = require('../config/database');
 
 const router = express.Router();
@@ -512,6 +513,35 @@ router.post('/:id/entrega-parcial', async (req, res) => {
     await transaction.rollback();
     console.error('❌ Error al registrar entrega parcial:', error);
     res.status(500).json({ error: 'Error al registrar la entrega parcial' });
+  }
+});
+
+// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE
+router.get('/:id/tickets-pendientes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
+    
+    // Buscar tickets que contribuyeron al saldo actual
+    const tickets = await Ticket.findAll({
+      where: {
+        id_cliente: id,
+        // Puedes agregar condiciones adicionales si tienes un campo de estado
+      },
+      order: [['fecha', 'DESC']],
+      attributes: ['id_ticket', 'numero_ticket', 'total', 'fecha', 'metodo_pago']
+    });
+    
+    console.log(`✅ ${tickets.length} tickets encontrados para cliente ${id}`);
+    res.json(tickets);
+    
+  } catch (error) {
+    console.error('❌ Error al obtener tickets pendientes:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener tickets pendientes',
+      details: error.message 
+    });
   }
 });
 
