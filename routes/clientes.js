@@ -6,7 +6,7 @@ const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente')
 const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const Ticket = require('../models/Ticket');
-const sequelize = require('../config/database');
+const { sequelize } = require('../config/database');
 
 const router = express.Router();
 
@@ -32,6 +32,107 @@ router.get('/test', async (req, res) => {
       status: 'ERROR',
       message: 'Error en la conexión',
       error: error.message
+    });
+  }
+});
+
+// ✅ BUSCAR CLIENTE POR NOMBRE O EMAIL
+router.get('/buscar', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.trim() === '') {
+      return res.json([]);
+    }
+
+    const clientes = await Cliente.findAll({
+      where: {
+        [Op.or]: [
+          { nombre: { [Op.like]: `%${q}%` } },
+          { email: { [Op.like]: `%${q}%` } },
+          { telefono: { [Op.like]: `%${q}%` } }
+        ]
+      },
+      attributes: [
+        'id_cliente', 
+        'nombre', 
+        'email', 
+        'telefono',
+        'saldo_cuenta_corriente',
+        'es_cuenta_corriente',
+        'limite_credito'
+      ],
+      limit: 10,
+      order: [['nombre', 'ASC']]
+    });
+
+    res.json(clientes);
+  } catch (error) {
+    console.error('❌ Error al buscar clientes:', error);
+    res.status(500).json({ error: 'Error al buscar clientes' });
+  }
+});
+
+// ✅ NUEVA RUTA: Obtener tickets disponibles para asociar
+router.get('/tickets-disponibles', async (req, res) => {
+  try {
+    console.log('🔍 Obteniendo tickets disponibles para asociar...');
+    
+    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO
+    const tickets = await Ticket.findAll({
+      where: {
+        id_cliente: null, // Solo tickets sin cliente
+        total: {
+          [Op.gt]: 0 // Solo tickets con monto mayor a 0
+        }
+      },
+      order: [['fecha', 'DESC']],
+      limit: 100, // Limitar resultados
+      attributes: [
+        'id_ticket', 
+        'numero_ticket', 
+        'total', 
+        'fecha', 
+        'tipo_pago', 
+        'productos'
+      ]
+    });
+    
+    // ✅ FORMATEAR DATOS PARA EL FRONTEND
+    const ticketsFormateados = tickets.map(ticket => {
+      let productosInfo = 'Sin productos';
+      try {
+        const productos = JSON.parse(ticket.productos);
+        if (Array.isArray(productos) && productos.length > 0) {
+          productosInfo = productos.slice(0, 2)
+            .map(p => p.nombre)
+            .join(', ');
+          if (productos.length > 2) {
+            productosInfo += `... (+${productos.length - 2} más)`;
+          }
+        }
+      } catch (error) {
+        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}`);
+      }
+      
+      return {
+        id_ticket: ticket.id_ticket,
+        numero_ticket: ticket.numero_ticket || ticket.id_ticket,
+        total: parseFloat(ticket.total),
+        fecha: ticket.fecha,
+        tipo_pago: ticket.tipo_pago || 'contado',
+        productos_info: productosInfo
+      };
+    });
+    
+    console.log(`✅ ${ticketsFormateados.length} tickets disponibles encontrados`);
+    res.json(ticketsFormateados);
+    
+  } catch (error) {
+    console.error('❌ Error al obtener tickets disponibles:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener tickets disponibles',
+      details: error.message 
     });
   }
 });
@@ -94,43 +195,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// ✅ BUSCAR CLIENTE POR NOMBRE O EMAIL
-router.get('/buscar', async (req, res) => {
-  try {
-    const { q } = req.query;
-    
-    if (!q || q.trim() === '') {
-      return res.json([]);
-    }
-
-    const clientes = await Cliente.findAll({
-      where: {
-        [Op.or]: [
-          { nombre: { [Op.like]: `%${q}%` } },
-          { email: { [Op.like]: `%${q}%` } },
-          { telefono: { [Op.like]: `%${q}%` } }
-        ]
-      },
-      attributes: [
-        'id_cliente', 
-        'nombre', 
-        'email', 
-        'telefono',
-        'saldo_cuenta_corriente',
-        'es_cuenta_corriente',
-        'limite_credito'
-      ],
-      limit: 10,
-      order: [['nombre', 'ASC']]
-    });
-
-    res.json(clientes);
-  } catch (error) {
-    console.error('❌ Error al buscar clientes:', error);
-    res.status(500).json({ error: 'Error al buscar clientes' });
-  }
-});
-
 // ✅ OBTENER CLIENTE POR ID con movimientos
 router.get('/:id', async (req, res) => {
   try {
@@ -164,6 +228,119 @@ router.get('/:id', async (req, res) => {
   } catch (error) {
     console.error('❌ Error al obtener cliente:', error);
     res.status(500).json({ error: 'Error al obtener cliente' });
+  }
+});
+
+// ✅ OBTENER RESUMEN DE CUENTA CORRIENTE
+router.get('/:id/resumen', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { limite = 10 } = req.query;
+
+    const cliente = await Cliente.findByPk(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    if (!cliente.es_cuenta_corriente) {
+      return res.status(400).json({ error: 'Este cliente no maneja cuenta corriente' });
+    }
+
+    // Obtener movimientos recientes
+    const movimientos = await MovimientoCuentaCorriente.findAll({
+      where: { id_cliente: id },
+      order: [['fecha', 'DESC']],
+      limit: parseInt(limite),
+      include: [
+        {
+          model: Usuario,
+          as: 'usuario_registro',
+          attributes: ['nombre']
+        }
+      ]
+    });
+
+    // Calcular estadísticas
+    const totalVentas = await MovimientoCuentaCorriente.sum('monto', {
+      where: { 
+        id_cliente: id, 
+        tipo_movimiento: 'venta'
+      }
+    }) || 0;
+
+    const totalPagos = await MovimientoCuentaCorriente.sum('monto', {
+      where: { 
+        id_cliente: id, 
+        tipo_movimiento: 'pago'
+      }
+    }) || 0;
+
+    const resumen = {
+      cliente: {
+        id_cliente: cliente.id_cliente,
+        nombre: cliente.nombre,
+        email: cliente.email,
+        telefono: cliente.telefono,
+        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente),
+        limite_credito: parseFloat(cliente.limite_credito),
+        credito_disponible: parseFloat(cliente.limite_credito) - parseFloat(cliente.saldo_cuenta_corriente)
+      },
+      estadisticas: {
+        total_ventas: parseFloat(totalVentas),
+        total_pagos: parseFloat(totalPagos),
+        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente)
+      },
+      movimientos
+    };
+
+    res.json(resumen);
+
+  } catch (error) {
+    console.error('❌ Error al obtener resumen:', error);
+    res.status(500).json({ error: 'Error al obtener resumen de cuenta' });
+  }
+});
+
+// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE
+router.get('/:id/tickets-pendientes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
+    
+    // ✅ BUSCAR DIRECTAMENTE EN MOVIMIENTOS DE VENTA
+    const movimientos = await MovimientoCuentaCorriente.findAll({
+      where: {
+        id_cliente: id,
+        tipo_movimiento: 'venta'
+      },
+      order: [['fecha', 'DESC']],
+      limit: 50
+    });
+    
+    console.log(`📊 Movimientos encontrados:`, movimientos.length);
+    
+    // ✅ CONVERTIR MOVIMIENTOS A FORMATO DE TICKETS
+    const tickets = movimientos.map(mov => ({
+      id_ticket: mov.id_ticket || `MOV-${mov.id_movimiento}`,
+      numero_ticket: mov.id_ticket || mov.id_movimiento,
+      total: parseFloat(mov.monto),
+      fecha: mov.fecha,
+      tipo_pago: 'cuenta_corriente',
+      descripcion: mov.descripcion
+    }));
+    
+    console.log(`✅ ${tickets.length} tickets simulados creados para cliente ${id}`);
+    console.log(`📋 Datos enviados:`, tickets);
+    
+    res.json(tickets);
+    
+  } catch (error) {
+    console.error('❌ Error al obtener tickets pendientes:', error);
+    res.status(500).json({ 
+      error: 'Error al obtener tickets pendientes',
+      details: error.message 
+    });
   }
 });
 
@@ -238,35 +415,6 @@ router.post('/registrar', async (req, res) => {
   }
 });
 
-// ✅ ACTUALIZAR CLIENTE
-router.put('/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { nombre, email, telefono, direccion, es_cuenta_corriente, limite_credito } = req.body;
-
-    const cliente = await Cliente.findByPk(id);
-    if (!cliente) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
-    }
-
-    await cliente.update({
-      nombre,
-      email,
-      telefono,
-      direccion,
-      es_cuenta_corriente: Boolean(es_cuenta_corriente),
-      limite_credito: parseFloat(limite_credito) || cliente.limite_credito
-    });
-
-    console.log('✅ Cliente actualizado:', cliente.nombre);
-    res.json({ message: 'Cliente actualizado exitosamente', cliente });
-
-  } catch (error) {
-    console.error('❌ Error al actualizar cliente:', error);
-    res.status(500).json({ error: 'Error al actualizar cliente' });
-  }
-});
-
 // ✅ REGISTRAR PAGO EN CUENTA CORRIENTE
 router.post('/:id/pago', async (req, res) => {
   const transaction = await sequelize.transaction();
@@ -322,76 +470,6 @@ router.post('/:id/pago', async (req, res) => {
     await transaction.rollback();
     console.error('❌ Error al registrar pago:', error);
     res.status(500).json({ error: 'Error al registrar el pago' });
-  }
-});
-
-// ✅ OBTENER RESUMEN DE CUENTA CORRIENTE
-router.get('/:id/resumen', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { limite = 10 } = req.query;
-
-    const cliente = await Cliente.findByPk(id);
-    if (!cliente) {
-      return res.status(404).json({ error: 'Cliente no encontrado' });
-    }
-
-    if (!cliente.es_cuenta_corriente) {
-      return res.status(400).json({ error: 'Este cliente no maneja cuenta corriente' });
-    }
-
-    // Obtener movimientos recientes
-    const movimientos = await MovimientoCuentaCorriente.findAll({
-      where: { id_cliente: id },
-      order: [['fecha', 'DESC']],
-      limit: parseInt(limite),
-      include: [
-        {
-          model: Usuario,
-          as: 'usuario_registro',
-          attributes: ['nombre']
-        }
-      ]
-    });
-
-    // Calcular estadísticas
-    const totalVentas = await MovimientoCuentaCorriente.sum('monto', {
-      where: { 
-        id_cliente: id, 
-        tipo_movimiento: 'venta'
-      }
-    }) || 0;
-
-    const totalPagos = await MovimientoCuentaCorriente.sum('monto', {
-      where: { 
-        id_cliente: id, 
-        tipo_movimiento: 'pago'
-      }
-    }) || 0;
-
-    const resumen = {
-      cliente: {
-        id_cliente: cliente.id_cliente,
-        nombre: cliente.nombre,
-        email: cliente.email,
-        telefono: cliente.telefono,
-        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente),
-        limite_credito: parseFloat(cliente.limite_credito),
-        credito_disponible: parseFloat(cliente.limite_credito) - parseFloat(cliente.saldo_cuenta_corriente)
-      },
-      estadisticas: {
-        total_ventas: parseFloat(totalVentas),
-        total_pagos: parseFloat(totalPagos),
-        saldo_actual: parseFloat(cliente.saldo_cuenta_corriente)
-      },
-      movimientos
-    };
-
-    res.json(resumen);
-
-  } catch (error) {
-    console.error('❌ Error al obtener resumen:', error);
-    res.status(500).json({ error: 'Error al obtener resumen de cuenta' });
   }
 });
 
@@ -516,49 +594,6 @@ router.post('/:id/entrega-parcial', async (req, res) => {
   }
 });
 
-// ✅ OBTENER TICKETS PENDIENTES DE UN CLIENTE - SOLUCIÓN CORREGIDA
-router.get('/:id/tickets-pendientes', async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
-    
-    // ✅ BUSCAR DIRECTAMENTE EN MOVIMIENTOS DE VENTA
-    const movimientos = await MovimientoCuentaCorriente.findAll({
-      where: {
-        id_cliente: id,
-        tipo_movimiento: 'venta'
-      },
-      order: [['fecha', 'DESC']],
-      limit: 50
-    });
-    
-    console.log(`📊 Movimientos encontrados:`, movimientos.length);
-    
-    // ✅ CONVERTIR MOVIMIENTOS A FORMATO DE TICKETS
-    const tickets = movimientos.map(mov => ({
-      id_ticket: mov.id_ticket || `MOV-${mov.id_movimiento}`,
-      numero_ticket: mov.id_ticket || mov.id_movimiento,
-      total: parseFloat(mov.monto),
-      fecha: mov.fecha,
-      tipo_pago: 'cuenta_corriente',
-      descripcion: mov.descripcion
-    }));
-    
-    console.log(`✅ ${tickets.length} tickets simulados creados para cliente ${id}`);
-    console.log(`📋 Datos enviados:`, tickets);
-    
-    res.json(tickets);
-    
-  } catch (error) {
-    console.error('❌ Error al obtener tickets pendientes:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener tickets pendientes',
-      details: error.message 
-    });
-  }
-});
-
 // ✅ NUEVA RUTA: Asociar ticket existente a cuenta corriente
 router.post('/:id/asociar-ticket', async (req, res) => {
   try {
@@ -644,67 +679,32 @@ router.post('/:id/asociar-ticket', async (req, res) => {
   }
 });
 
-// ✅ NUEVA RUTA: Obtener tickets disponibles para asociar
-router.get('/tickets-disponibles', async (req, res) => {
+// ✅ ACTUALIZAR CLIENTE
+router.put('/:id', async (req, res) => {
   try {
-    console.log('🔍 Obteniendo tickets disponibles para asociar...');
-    
-    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO
-    const tickets = await Ticket.findAll({
-      where: {
-        id_cliente: null, // Solo tickets sin cliente
-        total: {
-          [Op.gt]: 0 // Solo tickets con monto mayor a 0
-        }
-      },
-      order: [['fecha', 'DESC']],
-      limit: 100, // Limitar resultados
-      attributes: [
-        'id_ticket', 
-        'numero_ticket', 
-        'total', 
-        'fecha', 
-        'tipo_pago', 
-        'productos'
-      ]
+    const { id } = req.params;
+    const { nombre, email, telefono, direccion, es_cuenta_corriente, limite_credito } = req.body;
+
+    const cliente = await Cliente.findByPk(id);
+    if (!cliente) {
+      return res.status(404).json({ error: 'Cliente no encontrado' });
+    }
+
+    await cliente.update({
+      nombre,
+      email,
+      telefono,
+      direccion,
+      es_cuenta_corriente: Boolean(es_cuenta_corriente),
+      limite_credito: parseFloat(limite_credito) || cliente.limite_credito
     });
-    
-    // ✅ FORMATEAR DATOS PARA EL FRONTEND
-    const ticketsFormateados = tickets.map(ticket => {
-      let productosInfo = 'Sin productos';
-      try {
-        const productos = JSON.parse(ticket.productos);
-        if (Array.isArray(productos) && productos.length > 0) {
-          productosInfo = productos.slice(0, 2)
-            .map(p => p.nombre)
-            .join(', ');
-          if (productos.length > 2) {
-            productosInfo += `... (+${productos.length - 2} más)`;
-          }
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}`);
-      }
-      
-      return {
-        id_ticket: ticket.id_ticket,
-        numero_ticket: ticket.numero_ticket || ticket.id_ticket,
-        total: parseFloat(ticket.total),
-        fecha: ticket.fecha,
-        tipo_pago: ticket.tipo_pago || 'contado',
-        productos_info: productosInfo
-      };
-    });
-    
-    console.log(`✅ ${ticketsFormateados.length} tickets disponibles encontrados`);
-    res.json(ticketsFormateados);
-    
+
+    console.log('✅ Cliente actualizado:', cliente.nombre);
+    res.json({ message: 'Cliente actualizado exitosamente', cliente });
+
   } catch (error) {
-    console.error('❌ Error al obtener tickets disponibles:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener tickets disponibles',
-      details: error.message 
-    });
+    console.error('❌ Error al actualizar cliente:', error);
+    res.status(500).json({ error: 'Error al actualizar cliente' });
   }
 });
 
