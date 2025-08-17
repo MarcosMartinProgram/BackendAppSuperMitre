@@ -35,6 +35,7 @@ router.get('/test', async (req, res) => {
     });
   }
 });
+
 // ✅ NUEVA RUTA DE TEST PARA VERIFICAR MODELOS
 router.get('/test-models', async (req, res) => {
   try {
@@ -135,57 +136,143 @@ router.get('/buscar', async (req, res) => {
   }
 });
 
-// ✅ RUTA CORREGIDA: Obtener tickets disponibles para asociar
+// ✅ RUTA MEJORADA CON BÚSQUEDA Y PAGINACIÓN: Obtener tickets disponibles
 router.get('/tickets-disponibles', async (req, res) => {
   try {
-    console.log('🔍 Obteniendo tickets disponibles para asociar...');
+    const { 
+      busqueda = '', 
+      pagina = 1, 
+      limite = 50, 
+      ordenar = 'fecha',
+      direccion = 'DESC' 
+    } = req.query;
     
-    // ✅ BUSCAR TICKETS SIN CLIENTE ASOCIADO - SOLO CAMPOS QUE EXISTEN
-    const tickets = await Ticket.findAll({
-      where: {
-        id_cliente: null // Solo tickets sin cliente
-      },
-      order: [['fecha', 'DESC']],
-      limit: 100,
+    console.log('🔍 Obteniendo tickets disponibles con filtros:', {
+      busqueda,
+      pagina,
+      limite,
+      ordenar,
+      direccion
+    });
+    
+    // ✅ CONSTRUIR CONDICIONES DE BÚSQUEDA
+    const whereConditions = {
+      id_cliente: null // Solo tickets sin cliente
+    };
+    
+    // ✅ AGREGAR FILTROS DE BÚSQUEDA
+    if (busqueda.trim()) {
+      const busquedaLower = busqueda.toLowerCase().trim();
+      
+      // ✅ DETECTAR SI ES UN NÚMERO (BÚSQUEDA POR IMPORTE)
+      if (!isNaN(busquedaLower) && busquedaLower !== '') {
+        const monto = parseFloat(busquedaLower);
+        // Buscar tickets con importe exacto o similar (±0.50)
+        whereConditions.total = {
+          [Op.between]: [monto - 0.5, monto + 0.5]
+        };
+        console.log(`🔍 Buscando por importe: $${monto} (±0.50)`);
+      } else {
+        // ✅ BÚSQUEDA EN PRODUCTOS (JSON)
+        whereConditions[Op.or] = [
+          // Buscar en el JSON de productos
+          {
+            productos: {
+              [Op.like]: `%${busqueda}%`
+            }
+          },
+          // Buscar por ID de ticket si es un número
+          ...(busquedaLower.match(/^\d+$/) ? [{
+            id_ticket: parseInt(busquedaLower)
+          }] : [])
+        ];
+        console.log(`🔍 Buscando en productos: "${busqueda}"`);
+      }
+    }
+    
+    // ✅ CALCULAR OFFSET PARA PAGINACIÓN
+    const offset = (parseInt(pagina) - 1) * parseInt(limite);
+    
+    // ✅ OBTENER TICKETS CON PAGINACIÓN
+    const { count, rows: tickets } = await Ticket.findAndCountAll({
+      where: whereConditions,
+      order: [[ordenar, direccion.toUpperCase()]],
+      limit: parseInt(limite),
+      offset: offset,
       attributes: [
         'id_ticket', 
         'total', 
         'fecha', 
         'tipo_pago', 
-        'productos'
-        // ✅ REMOVIDO: 'numero_ticket' porque no existe
+        'productos',
+        'descuento',
+        'pago_recibido',
+        'entrega'
       ]
     });
+    
+    console.log(`📊 Tickets encontrados: ${count} total, ${tickets.length} en esta página`);
     
     // ✅ FORMATEAR DATOS PARA EL FRONTEND
     const ticketsFormateados = tickets.map(ticket => {
       let productosInfo = 'Sin productos';
+      let productosDetalle = [];
+      
       try {
-        const productos = JSON.parse(ticket.productos);
-        if (Array.isArray(productos) && productos.length > 0) {
-          productosInfo = productos.slice(0, 2)
-            .map(p => p.nombre)
-            .join(', ');
-          if (productos.length > 2) {
-            productosInfo += `... (+${productos.length - 2} más)`;
+        if (ticket.productos) {
+          const productos = JSON.parse(ticket.productos);
+          if (Array.isArray(productos) && productos.length > 0) {
+            productosDetalle = productos;
+            
+            // ✅ CREAR RESUMEN MÁS DETALLADO
+            if (productos.length === 1) {
+              productosInfo = productos[0].nombre || 'Producto sin nombre';
+            } else if (productos.length === 2) {
+              productosInfo = productos.map(p => p.nombre).join(', ');
+            } else {
+              productosInfo = `${productos[0].nombre}, ${productos[1].nombre}... (+${productos.length - 2} más)`;
+            }
           }
         }
       } catch (error) {
-        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}`);
+        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}:`, error.message);
+        productosInfo = 'Error en productos';
       }
       
       return {
         id_ticket: ticket.id_ticket,
-        numero_ticket: ticket.id_ticket, // ✅ USAR id_ticket como número
-        total: parseFloat(ticket.total),
+        numero_ticket: ticket.id_ticket,
+        total: parseFloat(ticket.total || 0),
         fecha: ticket.fecha,
         tipo_pago: ticket.tipo_pago || 'contado',
-        productos_info: productosInfo
+        productos_info: productosInfo,
+        productos_detalle: productosDetalle,
+        descuento: parseFloat(ticket.descuento || 0),
+        pago_recibido: parseFloat(ticket.pago_recibido || 0),
+        entrega: parseFloat(ticket.entrega || 0)
       };
     });
     
-    console.log(`✅ ${ticketsFormateados.length} tickets disponibles encontrados`);
-    res.json(ticketsFormateados);
+    // ✅ RESPUESTA CON METADATOS DE PAGINACIÓN
+    const response = {
+      tickets: ticketsFormateados,
+      paginacion: {
+        pagina_actual: parseInt(pagina),
+        total_paginas: Math.ceil(count / parseInt(limite)),
+        total_tickets: count,
+        tickets_por_pagina: parseInt(limite),
+        tiene_siguiente: offset + tickets.length < count,
+        tiene_anterior: parseInt(pagina) > 1
+      },
+      filtros: {
+        busqueda,
+        ordenar,
+        direccion
+      }
+    };
+    
+    console.log(`✅ Enviando ${ticketsFormateados.length} tickets formateados con paginación`);
+    res.json(response);
     
   } catch (error) {
     console.error('❌ Error al obtener tickets disponibles:', error);
@@ -855,153 +942,6 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('❌ Error al actualizar cliente:', error);
     res.status(500).json({ error: 'Error al actualizar cliente' });
-  }
-});
-
-// ✅ RUTA MEJORADA: Obtener tickets disponibles con búsqueda y paginación
-router.get('/tickets-disponibles', async (req, res) => {
-  try {
-    const { 
-      busqueda = '', 
-      pagina = 1, 
-      limite = 50, 
-      ordenar = 'fecha',
-      direccion = 'DESC' 
-    } = req.query;
-    
-    console.log('🔍 Obteniendo tickets disponibles con filtros:', {
-      busqueda,
-      pagina,
-      limite,
-      ordenar,
-      direccion
-    });
-    
-    // ✅ CONSTRUIR CONDICIONES DE BÚSQUEDA
-    const whereConditions = {
-      id_cliente: null // Solo tickets sin cliente
-    };
-    
-    // ✅ AGREGAR FILTROS DE BÚSQUEDA
-    if (busqueda.trim()) {
-      const busquedaLower = busqueda.toLowerCase().trim();
-      
-      // ✅ DETECTAR SI ES UN NÚMERO (BÚSQUEDA POR IMPORTE)
-      if (!isNaN(busquedaLower) && busquedaLower !== '') {
-        const monto = parseFloat(busquedaLower);
-        // Buscar tickets con importe exacto o similar (±0.50)
-        whereConditions.total = {
-          [Op.between]: [monto - 0.5, monto + 0.5]
-        };
-        console.log(`🔍 Buscando por importe: $${monto} (±0.50)`);
-      } else {
-        // ✅ BÚSQUEDA EN PRODUCTOS (JSON)
-        whereConditions[Op.or] = [
-          // Buscar en el JSON de productos
-          {
-            productos: {
-              [Op.like]: `%${busqueda}%`
-            }
-          },
-          // Buscar por ID de ticket si es un número
-          ...(busquedaLower.match(/^\d+$/) ? [{
-            id_ticket: parseInt(busquedaLower)
-          }] : [])
-        ];
-        console.log(`🔍 Buscando en productos: "${busqueda}"`);
-      }
-    }
-    
-    // ✅ CALCULAR OFFSET PARA PAGINACIÓN
-    const offset = (parseInt(pagina) - 1) * parseInt(limite);
-    
-    // ✅ OBTENER TICKETS CON PAGINACIÓN
-    const { count, rows: tickets } = await Ticket.findAndCountAll({
-      where: whereConditions,
-      order: [[ordenar, direccion.toUpperCase()]],
-      limit: parseInt(limite),
-      offset: offset,
-      attributes: [
-        'id_ticket', 
-        'total', 
-        'fecha', 
-        'tipo_pago', 
-        'productos',
-        'descuento',
-        'pago',
-        'entrega'
-      ]
-    });
-    
-    console.log(`📊 Tickets encontrados: ${count} total, ${tickets.length} en esta página`);
-    
-    // ✅ FORMATEAR DATOS PARA EL FRONTEND
-    const ticketsFormateados = tickets.map(ticket => {
-      let productosInfo = 'Sin productos';
-      let productosDetalle = [];
-      
-      try {
-        if (ticket.productos) {
-          const productos = JSON.parse(ticket.productos);
-          if (Array.isArray(productos) && productos.length > 0) {
-            productosDetalle = productos;
-            
-            // ✅ CREAR RESUMEN MÁS DETALLADO
-            if (productos.length === 1) {
-              productosInfo = productos[0].nombre || 'Producto sin nombre';
-            } else if (productos.length === 2) {
-              productosInfo = productos.map(p => p.nombre).join(', ');
-            } else {
-              productosInfo = `${productos[0].nombre}, ${productos[1].nombre}... (+${productos.length - 2} más)`;
-            }
-          }
-        }
-      } catch (error) {
-        console.warn(`⚠️ Error al parsear productos del ticket ${ticket.id_ticket}:`, error.message);
-        productosInfo = 'Error en productos';
-      }
-      
-      return {
-        id_ticket: ticket.id_ticket,
-        numero_ticket: ticket.id_ticket,
-        total: parseFloat(ticket.total || 0),
-        fecha: ticket.fecha,
-        tipo_pago: ticket.tipo_pago || 'contado',
-        productos_info: productosInfo,
-        productos_detalle: productosDetalle,
-        descuento: parseFloat(ticket.descuento || 0),
-        pago_recibido: parseFloat(ticket.pago || 0),
-        entrega: parseFloat(ticket.entrega || 0)
-      };
-    });
-    
-    // ✅ RESPUESTA CON METADATOS DE PAGINACIÓN
-    const response = {
-      tickets: ticketsFormateados,
-      paginacion: {
-        pagina_actual: parseInt(pagina),
-        total_paginas: Math.ceil(count / parseInt(limite)),
-        total_tickets: count,
-        tickets_por_pagina: parseInt(limite),
-        tiene_siguiente: offset + tickets.length < count,
-        tiene_anterior: parseInt(pagina) > 1
-      },
-      filtros: {
-        busqueda,
-        ordenar,
-        direccion
-      }
-    };
-    
-    console.log(`✅ Enviando ${ticketsFormateados.length} tickets formateados`);
-    res.json(response);
-    
-  } catch (error) {
-    console.error('❌ Error al obtener tickets disponibles:', error);
-    res.status(500).json({ 
-      error: 'Error al obtener tickets disponibles',
-      details: error.message 
-    });
   }
 });
 
