@@ -6,7 +6,7 @@ const Cliente = require('../models/Cliente');
 const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente');
 const sequelize = require('../config/database');
 
-// ✅ GUARDAR TICKET CON MANEJO DE CLIENTES CORREGIDO
+// ✅ REEMPLAZAR COMPLETAMENTE LA FUNCIÓN POST
 router.post('/', async (req, res) => {
   const transaction = await sequelize.transaction();
 
@@ -23,12 +23,11 @@ router.post('/', async (req, res) => {
       id_vendedor = null
     } = req.body;
 
-    console.log('📋 Creando ticket:', {
+    console.log('📋 Datos recibidos:', {
+      total: parseFloat(total),
+      entrega: parseFloat(entrega),
       tipo_pago,
-      id_cliente,
-      total,
-      entrega,
-      productos: JSON.parse(productos).length + ' productos'
+      id_cliente
     });
 
     // Crear el ticket
@@ -44,7 +43,9 @@ router.post('/', async (req, res) => {
       id_vendedor: id_vendedor || null
     }, { transaction });
 
-    // ✅ MANEJO DE CUENTA CORRIENTE CORREGIDO
+    console.log('✅ Ticket creado:', nuevoTicket.id_ticket);
+
+    // ✅ SOLO PROCESAR CUENTA CORRIENTE SI CORRESPONDE
     if (tipo_pago === 'cuenta_corriente' && id_cliente) {
       const cliente = await Cliente.findByPk(id_cliente, { transaction });
       
@@ -59,20 +60,22 @@ router.post('/', async (req, res) => {
       }
 
       const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente) || 0;
+      const totalTicket = parseFloat(total);
+      const entregaParcial = parseFloat(entrega);
       
-      // ✅ CORREGIR CÁLCULO: El monto que se agrega a cuenta corriente debe ser el total menos la entrega
-      const montoCredito = parseFloat(total) - parseFloat(entrega);
-      const saldoNuevo = saldoAnterior + montoCredito;
+      // ✅ CÁLCULO CORRECTO: Solo el monto que NO se pagó va a crédito
+      const montoACredito = totalTicket - entregaParcial;
+      const saldoNuevo = saldoAnterior + montoACredito;
 
-      console.log('💰 Calculando saldos:');
-      console.log(`  - Total ticket: $${total}`);
-      console.log(`  - Entrega: $${entrega}`);
-      console.log(`  - Monto a crédito: $${montoCredito}`);
-      console.log(`  - Saldo anterior: $${saldoAnterior}`);
-      console.log(`  - Saldo nuevo: $${saldoNuevo}`);
+      console.log('💰 CÁLCULO DE CUENTA CORRIENTE:');
+      console.log(`  📊 Total del ticket: $${totalTicket}`);
+      console.log(`  💵 Entrega parcial: $${entregaParcial}`);
+      console.log(`  🏦 Monto a crédito: $${montoACredito}`);
+      console.log(`  📈 Saldo anterior: $${saldoAnterior}`);
+      console.log(`  📈 Saldo nuevo: $${saldoNuevo}`);
 
-      // ✅ VERIFICAR LÍMITE DE CRÉDITO SOLO SI HAY MONTO A CRÉDITO
-      if (montoCredito > 0 && cliente.limite_credito && saldoNuevo > parseFloat(cliente.limite_credito)) {
+      // Verificar límite de crédito solo si hay monto a crédito
+      if (montoACredito > 0 && cliente.limite_credito && saldoNuevo > parseFloat(cliente.limite_credito)) {
         await transaction.rollback();
         const disponible = parseFloat(cliente.limite_credito) - saldoAnterior;
         return res.status(400).json({ 
@@ -80,7 +83,7 @@ router.post('/', async (req, res) => {
           saldo_actual: saldoAnterior,
           limite_credito: cliente.limite_credito,
           credito_disponible: disponible,
-          monto_solicitado: montoCredito
+          monto_solicitado: montoACredito
         });
       }
 
@@ -89,35 +92,41 @@ router.post('/', async (req, res) => {
         saldo_cuenta_corriente: saldoNuevo
       }, { transaction });
 
-      // ✅ REGISTRAR MOVIMIENTO DE VENTA SOLO SI HAY MONTO A CRÉDITO
-      if (montoCredito > 0) {
+      // ✅ REGISTRAR SOLO LOS MOVIMIENTOS NECESARIOS
+      
+      // 1. Si hay monto a crédito, registrar la venta
+      if (montoACredito > 0) {
         await MovimientoCuentaCorriente.create({
           id_cliente: parseInt(id_cliente),
           id_ticket: nuevoTicket.id_ticket,
           tipo_movimiento: 'venta',
-          monto: montoCredito,
-          descripcion: `Venta - Ticket #${nuevoTicket.id_ticket}`,
+          monto: montoACredito,
+          descripcion: `Venta a crédito - Ticket #${nuevoTicket.id_ticket}`,
           saldo_anterior: saldoAnterior,
           saldo_actual: saldoNuevo,
           id_usuario_registro: id_vendedor
         }, { transaction });
+
+        console.log(`✅ Registrado movimiento de venta: +$${montoACredito}`);
       }
 
-      // ✅ REGISTRAR ENTREGA PARCIAL COMO MOVIMIENTO INFORMATIVO SI HAY
-      if (parseFloat(entrega) > 0) {
+      // 2. Si hay entrega parcial, registrar el pago
+      if (entregaParcial > 0) {
         await MovimientoCuentaCorriente.create({
           id_cliente: parseInt(id_cliente),
           id_ticket: nuevoTicket.id_ticket,
           tipo_movimiento: 'entrega_parcial',
-          monto: parseFloat(entrega),
+          monto: entregaParcial,
           descripcion: `Entrega parcial - Ticket #${nuevoTicket.id_ticket}`,
           saldo_anterior: saldoAnterior,
           saldo_actual: saldoNuevo,
           id_usuario_registro: id_vendedor
         }, { transaction });
+
+        console.log(`✅ Registrado movimiento de entrega: -$${entregaParcial}`);
       }
 
-      console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: ${saldoAnterior} → ${saldoNuevo}`);
+      console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: $${saldoAnterior} → $${saldoNuevo}`);
     }
 
     await transaction.commit();
@@ -132,7 +141,7 @@ router.post('/', async (req, res) => {
       ]
     });
 
-    console.log('✅ Ticket creado exitosamente:', nuevoTicket.id_ticket);
+    console.log('✅ Ticket completado exitosamente:', nuevoTicket.id_ticket);
     res.status(201).json({
       ticket: ticketCompleto,
       mensaje: tipo_pago === 'cuenta_corriente' ? 'Venta registrada en cuenta corriente' : 'Venta de contado registrada'
