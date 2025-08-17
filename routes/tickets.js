@@ -6,7 +6,7 @@ const Cliente = require('../models/Cliente');
 const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente');
 const sequelize = require('../config/database');
 
-// ✅ GUARDAR TICKET CON MANEJO DE CLIENTES
+// ✅ GUARDAR TICKET CON MANEJO DE CLIENTES CORREGIDO
 router.post('/', async (req, res) => {
   const transaction = await sequelize.transaction();
 
@@ -27,6 +27,7 @@ router.post('/', async (req, res) => {
       tipo_pago,
       id_cliente,
       total,
+      entrega,
       productos: JSON.parse(productos).length + ' productos'
     });
 
@@ -43,7 +44,7 @@ router.post('/', async (req, res) => {
       id_vendedor: id_vendedor || null
     }, { transaction });
 
-    // ✅ MANEJO DE CUENTA CORRIENTE
+    // ✅ MANEJO DE CUENTA CORRIENTE CORREGIDO
     if (tipo_pago === 'cuenta_corriente' && id_cliente) {
       const cliente = await Cliente.findByPk(id_cliente, { transaction });
       
@@ -58,11 +59,20 @@ router.post('/', async (req, res) => {
       }
 
       const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente) || 0;
-      const montoTotal = parseFloat(total) - parseFloat(entrega); // Descontar entrega parcial
-      const saldoNuevo = saldoAnterior + montoTotal;
+      
+      // ✅ CORREGIR CÁLCULO: El monto que se agrega a cuenta corriente debe ser el total menos la entrega
+      const montoCredito = parseFloat(total) - parseFloat(entrega);
+      const saldoNuevo = saldoAnterior + montoCredito;
 
-      // ✅ VERIFICAR LÍMITE DE CRÉDITO
-      if (cliente.limite_credito && saldoNuevo > parseFloat(cliente.limite_credito)) {
+      console.log('💰 Calculando saldos:');
+      console.log(`  - Total ticket: $${total}`);
+      console.log(`  - Entrega: $${entrega}`);
+      console.log(`  - Monto a crédito: $${montoCredito}`);
+      console.log(`  - Saldo anterior: $${saldoAnterior}`);
+      console.log(`  - Saldo nuevo: $${saldoNuevo}`);
+
+      // ✅ VERIFICAR LÍMITE DE CRÉDITO SOLO SI HAY MONTO A CRÉDITO
+      if (montoCredito > 0 && cliente.limite_credito && saldoNuevo > parseFloat(cliente.limite_credito)) {
         await transaction.rollback();
         const disponible = parseFloat(cliente.limite_credito) - saldoAnterior;
         return res.status(400).json({ 
@@ -70,53 +80,48 @@ router.post('/', async (req, res) => {
           saldo_actual: saldoAnterior,
           limite_credito: cliente.limite_credito,
           credito_disponible: disponible,
-          monto_solicitado: montoTotal
+          monto_solicitado: montoCredito
         });
       }
 
-      // Actualizar saldo del cliente
+      // ✅ ACTUALIZAR SALDO DEL CLIENTE
       await cliente.update({
         saldo_cuenta_corriente: saldoNuevo
       }, { transaction });
 
-      // ✅ REGISTRAR MOVIMIENTO DE VENTA
-      await MovimientoCuentaCorriente.create({
-        id_cliente: parseInt(id_cliente),
-        id_ticket: nuevoTicket.id_ticket,
-        tipo_movimiento: 'venta',
-        monto: montoTotal,
-        descripcion: `Venta - Ticket #${nuevoTicket.id_ticket}`,
-        saldo_anterior: saldoAnterior,
-        saldo_actual: saldoNuevo,
-        id_usuario_registro: id_vendedor
-      }, { transaction });
-
-      // ✅ REGISTRAR ENTREGA PARCIAL SI HAY
-      if (parseFloat(entrega) > 0) {
-        const saldoConEntrega = saldoNuevo - parseFloat(entrega);
-        
-        await cliente.update({
-          saldo_cuenta_corriente: saldoConEntrega
+      // ✅ REGISTRAR MOVIMIENTO DE VENTA SOLO SI HAY MONTO A CRÉDITO
+      if (montoCredito > 0) {
+        await MovimientoCuentaCorriente.create({
+          id_cliente: parseInt(id_cliente),
+          id_ticket: nuevoTicket.id_ticket,
+          tipo_movimiento: 'venta',
+          monto: montoCredito,
+          descripcion: `Venta - Ticket #${nuevoTicket.id_ticket}`,
+          saldo_anterior: saldoAnterior,
+          saldo_actual: saldoNuevo,
+          id_usuario_registro: id_vendedor
         }, { transaction });
+      }
 
+      // ✅ REGISTRAR ENTREGA PARCIAL COMO MOVIMIENTO INFORMATIVO SI HAY
+      if (parseFloat(entrega) > 0) {
         await MovimientoCuentaCorriente.create({
           id_cliente: parseInt(id_cliente),
           id_ticket: nuevoTicket.id_ticket,
           tipo_movimiento: 'entrega_parcial',
           monto: parseFloat(entrega),
           descripcion: `Entrega parcial - Ticket #${nuevoTicket.id_ticket}`,
-          saldo_anterior: saldoNuevo,
-          saldo_actual: saldoConEntrega,
+          saldo_anterior: saldoAnterior,
+          saldo_actual: saldoNuevo,
           id_usuario_registro: id_vendedor
         }, { transaction });
       }
 
-      console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: ${saldoAnterior} → ${saldoNuevo - (parseFloat(entrega) || 0)}`);
+      console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: ${saldoAnterior} → ${saldoNuevo}`);
     }
 
     await transaction.commit();
     
-    // ✅ RESPUESTA CON INFORMACIÓN COMPLETA
     const ticketCompleto = await Ticket.findByPk(nuevoTicket.id_ticket, {
       include: [
         {

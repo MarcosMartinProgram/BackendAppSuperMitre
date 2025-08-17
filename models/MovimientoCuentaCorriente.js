@@ -27,9 +27,12 @@ const MovimientoCuentaCorriente = sequelize.define(
       },
     },
     tipo_movimiento: {
-      type: DataTypes.ENUM('venta', 'pago', 'entrega_parcial', 'ajuste'),
-      allowNull: false,
-    },
+    type: DataTypes.ENUM('venta', 'pago', 'ajuste', 'entrega_parcial'),
+    allowNull: false,
+    validate: {
+      isIn: [['venta', 'pago', 'ajuste', 'entrega_parcial']]
+    }
+  },
     monto: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
