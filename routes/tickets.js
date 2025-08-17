@@ -64,7 +64,7 @@ router.post('/', async (req, res) => {
       const entregaParcial = parseFloat(entrega);
       
       // ✅ CÁLCULO CORRECTO: Solo el monto que NO se pagó va a crédito
-      const montoACredito = totalTicket - entregaParcial;
+      const montoACredito = totalTicket;
       const saldoNuevo = saldoAnterior + montoACredito;
 
       console.log('💰 CÁLCULO DE CUENTA CORRIENTE:');
