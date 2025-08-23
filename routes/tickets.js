@@ -92,20 +92,34 @@ router.post('/', async (req, res) => {
         saldo_cuenta_corriente: saldoNuevo
       }, { transaction });
 
-      // ✅ REGISTRAR UN SOLO MOVIMIENTO: solo lo que va a crédito
-      if (montoACredito > 0) {
+      // ✅ REGISTRAR MOVIMIENTO DE VENTA COMPLETA
+      await MovimientoCuentaCorriente.create({
+        id_cliente: parseInt(id_cliente),
+        id_ticket: nuevoTicket.id_ticket,
+        tipo_movimiento: 'venta',
+        monto: totalTicket, // ✅ TOTAL COMPLETO DE LA VENTA
+        descripcion: `Venta - Ticket #${nuevoTicket.id_ticket}`,
+        saldo_anterior: saldoAnterior,
+        saldo_actual: saldoAnterior + totalTicket, // Saldo intermedio después de la venta
+        id_usuario_registro: id_vendedor
+      }, { transaction });
+
+      console.log(`✅ Registrado movimiento de venta: +$${totalTicket}`);
+
+      // ✅ REGISTRAR ENTREGA PARCIAL SI EXISTE
+      if (entregaParcial > 0) {
         await MovimientoCuentaCorriente.create({
           id_cliente: parseInt(id_cliente),
           id_ticket: nuevoTicket.id_ticket,
-          tipo_movimiento: 'venta',
-          monto: montoACredito, // ✅ SOLO $1810 (no $2810)
-          descripcion: `Venta a crédito - Ticket #${nuevoTicket.id_ticket}`,
-          saldo_anterior: saldoAnterior,
-          saldo_actual: saldoNuevo,
+          tipo_movimiento: 'entrega_parcial',
+          monto: entregaParcial,
+          descripcion: `Entrega efectivo - Ticket #${nuevoTicket.id_ticket}`,
+          saldo_anterior: saldoAnterior + totalTicket, // Después de la venta
+          saldo_actual: saldoNuevo, // Saldo final después de la entrega
           id_usuario_registro: id_vendedor
         }, { transaction });
 
-        console.log(`✅ Registrado movimiento: +$${montoACredito} (${saldoAnterior} → ${saldoNuevo})`);
+        console.log(`✅ Registrado movimiento de entrega parcial: -$${entregaParcial}`);
       }
 
       console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: $${saldoAnterior} → $${saldoNuevo}`);
