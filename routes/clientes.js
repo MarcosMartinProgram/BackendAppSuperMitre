@@ -378,7 +378,7 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/resumen', async (req, res) => {
   try {
     const { id } = req.params;
-    const { limite = 10 } = req.query;
+    const { limite = 20 } = req.query;
 
     const cliente = await Cliente.findByPk(id);
     if (!cliente) {
@@ -389,16 +389,28 @@ router.get('/:id/resumen', async (req, res) => {
       return res.status(400).json({ error: 'Este cliente no maneja cuenta corriente' });
     }
 
-    // Obtener movimientos recientes
+    // ✅ OBTENER TODOS LOS MOVIMIENTOS INCLUYENDO NÚMERO DE RECIBO
     const movimientos = await MovimientoCuentaCorriente.findAll({
       where: { id_cliente: id },
       order: [['fecha', 'DESC']],
       limit: parseInt(limite),
+      attributes: [
+        'id_movimiento',
+        'tipo_movimiento',
+        'monto',
+        'descripcion',
+        'fecha',
+        'saldo_anterior',
+        'saldo_actual',
+        'numero_recibo',
+        'tickets_pagados'
+      ],
       include: [
         {
           model: Usuario,
           as: 'usuario_registro',
-          attributes: ['nombre']
+          attributes: ['nombre'],
+          required: false
         }
       ]
     });
@@ -407,7 +419,7 @@ router.get('/:id/resumen', async (req, res) => {
     const totalVentas = await MovimientoCuentaCorriente.sum('monto', {
       where: { 
         id_cliente: id, 
-        tipo_movimiento: 'venta'
+        tipo_movimiento: ['venta', 'entrega_parcial']
       }
     }) || 0;
 
@@ -417,6 +429,20 @@ router.get('/:id/resumen', async (req, res) => {
         tipo_movimiento: 'pago'
       }
     }) || 0;
+
+    // ✅ FORMATEAR MOVIMIENTOS CON INFORMACIÓN COMPLETA
+    const movimientosFormateados = movimientos.map(mov => ({
+      id_movimiento: mov.id_movimiento,
+      tipo_movimiento: mov.tipo_movimiento,
+      monto: parseFloat(mov.monto),
+      descripcion: mov.descripcion,
+      fecha: mov.fecha,
+      saldo_anterior: parseFloat(mov.saldo_anterior),
+      saldo_actual: parseFloat(mov.saldo_actual),
+      numero_recibo: mov.numero_recibo,
+      tickets_pagados: mov.tickets_pagados ? JSON.parse(mov.tickets_pagados) : [],
+      usuario_registro: mov.usuario_registro?.nombre || null
+    }));
 
     const resumen = {
       cliente: {
@@ -433,7 +459,7 @@ router.get('/:id/resumen', async (req, res) => {
         total_pagos: parseFloat(totalPagos),
         saldo_actual: parseFloat(cliente.saldo_cuenta_corriente)
       },
-      movimientos
+      movimientos: movimientosFormateados
     };
 
     res.json(resumen);
@@ -451,32 +477,39 @@ router.get('/:id/tickets-pendientes', async (req, res) => {
     
     console.log(`📋 Obteniendo tickets pendientes para cliente ${id}`);
     
-    // ✅ BUSCAR DIRECTAMENTE EN MOVIMIENTOS DE VENTA
-    const movimientos = await MovimientoCuentaCorriente.findAll({
+    // ✅ BUSCAR TICKETS NO PAGADOS DEL CLIENTE
+    const tickets = await Ticket.findAll({
       where: {
         id_cliente: id,
-        tipo_movimiento: 'venta'
+        tipo_pago: 'cuenta_corriente',
+        estado: ['pendiente', 'pagado_parcial'] // Excluir pagado_total
       },
       order: [['fecha', 'DESC']],
-      limit: 50
+      attributes: [
+        'id_ticket', 
+        'total', 
+        'fecha', 
+        'productos',
+        'descuento',
+        'entrega',
+        'estado'
+      ]
     });
     
-    console.log(`📊 Movimientos encontrados:`, movimientos.length);
+    console.log(`✅ ${tickets.length} tickets pendientes encontrados para cliente ${id}`);
     
-    // ✅ CONVERTIR MOVIMIENTOS A FORMATO DE TICKETS
-    const tickets = movimientos.map(mov => ({
-      id_ticket: mov.id_ticket || `MOV-${mov.id_movimiento}`,
-      numero_ticket: mov.id_ticket || mov.id_movimiento,
-      total: parseFloat(mov.monto),
-      fecha: mov.fecha,
+    // ✅ FORMATEAR DATOS
+    const ticketsFormateados = tickets.map(ticket => ({
+      id_ticket: ticket.id_ticket,
+      numero_ticket: ticket.id_ticket,
+      total: parseFloat(ticket.total),
+      fecha: ticket.fecha,
       tipo_pago: 'cuenta_corriente',
-      descripcion: mov.descripcion
+      estado: ticket.estado,
+      productos_info: JSON.parse(ticket.productos || '[]').slice(0, 2).map(p => p.nombre).join(', ') + '...'
     }));
     
-    console.log(`✅ ${tickets.length} tickets simulados creados para cliente ${id}`);
-    console.log(`📋 Datos enviados:`, tickets);
-    
-    res.json(tickets);
+    res.json(ticketsFormateados);
     
   } catch (error) {
     console.error('❌ Error al obtener tickets pendientes:', error);
@@ -564,7 +597,7 @@ router.post('/:id/pago', async (req, res) => {
 
   try {
     const { id } = req.params;
-    const { monto, descripcion = '', id_usuario_registro } = req.body;
+    const { monto, descripcion = '', id_usuario_registro, tickets_pagados = [] } = req.body;
 
     if (!monto || monto <= 0) {
       return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
@@ -584,12 +617,15 @@ router.post('/:id/pago', async (req, res) => {
     const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente);
     const saldoNuevo = saldoAnterior - parseFloat(monto); // Pago reduce el saldo
 
+    // ✅ GENERAR NÚMERO DE RECIBO
+    const numeroRecibo = `REC-${Date.now()}-${id}`;
+
     // Actualizar saldo del cliente
     await cliente.update({
       saldo_cuenta_corriente: saldoNuevo
     }, { transaction });
 
-    // Registrar movimiento
+    // ✅ REGISTRAR MOVIMIENTO CON NÚMERO DE RECIBO
     await MovimientoCuentaCorriente.create({
       id_cliente: parseInt(id),
       tipo_movimiento: 'pago',
@@ -597,16 +633,31 @@ router.post('/:id/pago', async (req, res) => {
       descripcion: descripcion || `Pago recibido`,
       saldo_anterior: saldoAnterior,
       saldo_actual: saldoNuevo,
+      numero_recibo: numeroRecibo,
+      tickets_pagados: JSON.stringify(tickets_pagados),
       id_usuario_registro: id_usuario_registro || null
     }, { transaction });
+
+    // ✅ ACTUALIZAR ESTADO DE TICKETS PAGADOS
+    if (tickets_pagados.length > 0) {
+      await Ticket.update(
+        { estado: 'pagado_total' },
+        { 
+          where: { id_ticket: tickets_pagados },
+          transaction 
+        }
+      );
+    }
 
     await transaction.commit();
 
     console.log(`💰 Pago registrado para ${cliente.nombre}: $${monto}`);
     res.json({
       message: 'Pago registrado exitosamente',
+      numeroRecibo: numeroRecibo,
       saldo_anterior: saldoAnterior,
-      saldo_actual: saldoNuevo
+      saldo_actual: saldoNuevo,
+      tickets_pagados: tickets_pagados
     });
 
   } catch (error) {
