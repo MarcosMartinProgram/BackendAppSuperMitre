@@ -61,6 +61,15 @@ const MovimientoCuentaCorriente = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       defaultValue: 0.00,
     },
+    numero_recibo: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    tickets_pagados: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'JSON con IDs de tickets que se pagaron con este movimiento'
+    },
   },
   {
     timestamps: false,

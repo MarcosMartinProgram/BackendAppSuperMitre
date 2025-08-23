@@ -60,6 +60,11 @@ const Ticket = sequelize.define('Ticket', {
     type: DataTypes.DECIMAL(10, 2),
     defaultValue: 0,
   },
+  estado: {
+    type: DataTypes.ENUM('pendiente', 'pagado_parcial', 'pagado_total'),
+    defaultValue: 'pendiente',
+    comment: 'Estado de pago del ticket en cuenta corriente'
+  },
 }, {
   tableName: 'tickets',
   timestamps: false,
