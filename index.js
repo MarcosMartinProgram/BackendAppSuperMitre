@@ -98,6 +98,8 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use("/api/mercadopago", mercadoPagoRoutes);
 app.use("/api/imagenAndroid", imagenAndroidRoutes);
+// ✅ AGREGAR esta línea para las rutas de envío
+app.use('/api/tickets', require('./routes/envioTickets'));
 
 // ✅ RUTA DE PRUEBA CORS
 app.get('/api/test-cors', (req, res) => {
