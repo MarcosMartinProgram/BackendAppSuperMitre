@@ -245,4 +245,118 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// ✅ NUEVA RUTA: Buscar tickets
+router.get('/buscar', async (req, res) => {
+  try {
+    const { q } = req.query;
+    
+    if (!q || q.trim().length < 2) {
+      return res.json([]);
+    }
+
+    const termino = q.trim();
+    const { Op } = require('sequelize');
+    
+    // Construir condiciones de búsqueda
+    const whereConditions = {
+      [Op.or]: []
+    };
+
+    // Buscar por número de ticket
+    if (!isNaN(termino)) {
+      whereConditions[Op.or].push({
+        id_ticket: {
+          [Op.like]: `%${termino}%`
+        }
+      });
+    }
+
+    // Buscar por monto (si empieza con $ o es número)
+    const montoTermino = termino.replace('$', '').replace(',', '');
+    if (!isNaN(montoTermino) && montoTermino !== '') {
+      whereConditions[Op.or].push({
+        total: {
+          [Op.like]: `%${montoTermino}%`
+        }
+      });
+    }
+
+    // Buscar por fecha (formato dd/mm/yyyy)
+    if (termino.includes('/')) {
+      const fechaPartes = termino.split('/');
+      if (fechaPartes.length === 3) {
+        try {
+          const [dia, mes, año] = fechaPartes;
+          const fechaBusqueda = `${año}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}`;
+          
+          whereConditions[Op.or].push({
+            fecha: {
+              [Op.like]: `%${fechaBusqueda}%`
+            }
+          });
+        } catch (error) {
+          console.log('Formato de fecha inválido');
+        }
+      }
+    }
+
+    // Buscar en productos (por nombre)
+    whereConditions[Op.or].push({
+      productos: {
+        [Op.like]: `%${termino}%`
+      }
+    });
+
+    const tickets = await Ticket.findAll({
+      where: whereConditions,
+      include: [
+        {
+          model: Cliente,
+          as: 'Cliente',
+          required: false,
+          where: {
+            [Op.or]: [
+              {
+                nombre: {
+                  [Op.like]: `%${termino}%`
+                }
+              },
+              {
+                email: {
+                  [Op.like]: `%${termino}%`
+                }
+              }
+            ]
+          }
+        }
+      ],
+      order: [['fecha', 'DESC']],
+      limit: 50 // Máximo 50 resultados
+    });
+
+    // También buscar tickets sin filtro de cliente si no se encontraron
+    if (tickets.length === 0) {
+      const ticketsSinCliente = await Ticket.findAll({
+        where: whereConditions,
+        include: [
+          {
+            model: Cliente,
+            as: 'Cliente',
+            required: false
+          }
+        ],
+        order: [['fecha', 'DESC']],
+        limit: 50
+      });
+      
+      return res.json(ticketsSinCliente);
+    }
+
+    res.json(tickets);
+  } catch (error) {
+    console.error('Error buscando tickets:', error);
+    res.status(500).json({ error: 'Error al buscar tickets' });
+  }
+});
+
 module.exports = router;
