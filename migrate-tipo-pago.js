@@ -14,6 +14,7 @@ const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
 
 async function migrate() {
   try {
+    console.log('🔍 Conectando a:', DB_HOST, DB_NAME, DB_USER);
     await sequelize.authenticate();
     console.log('✅ Conectado a la base de datos');
 
@@ -56,6 +57,7 @@ async function migrate() {
     process.exit(0);
   } catch (error) {
     console.error('❌ Error:', error.message);
+    console.error('Stack:', error.stack);
     process.exit(1);
   }
 }
