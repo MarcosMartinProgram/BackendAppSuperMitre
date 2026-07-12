@@ -45,8 +45,9 @@ router.post('/', async (req, res) => {
 
     console.log('✅ Ticket creado:', nuevoTicket.id_ticket);
 
-    // ✅ SOLO PROCESAR CUENTA CORRIENTE SI CORRESPONDE
-    if (tipo_pago === 'cuenta_corriente' && id_cliente) {
+    // ✅ SOLO PROCESAR CUENTA CORRIENTE SI CORRESPONDE (incluye parcial)
+    const esCuentaCorriente = tipo_pago === 'cuenta_corriente' || tipo_pago === 'cuenta_corriente_parcial';
+    if (esCuentaCorriente && id_cliente) {
       const cliente = await Cliente.findByPk(id_cliente, { transaction });
       
       if (!cliente) {
@@ -217,9 +218,9 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Ticket no encontrado' });
     }
 
-    // Si es cuenta corriente, obtener movimientos relacionados
+    // Si es cuenta corriente (incluye parcial), obtener movimientos relacionados
     let movimientos = [];
-    if (ticket.tipo_pago === 'cuenta_corriente' && ticket.id_cliente) {
+    if ((ticket.tipo_pago === 'cuenta_corriente' || ticket.tipo_pago === 'cuenta_corriente_parcial') && ticket.id_cliente) {
       movimientos = await MovimientoCuentaCorriente.findAll({
         where: { id_ticket: id },
         order: [['fecha', 'ASC']],

@@ -481,7 +481,7 @@ router.get('/:id/tickets-pendientes', async (req, res) => {
     const tickets = await Ticket.findAll({
       where: {
         id_cliente: id,
-        tipo_pago: 'cuenta_corriente',
+        tipo_pago: ['cuenta_corriente', 'cuenta_corriente_parcial'],
         estado: ['pendiente', 'pagado_parcial'] // Excluir pagado_total
       },
       order: [['fecha', 'DESC']],

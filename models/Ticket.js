@@ -36,7 +36,7 @@ const Ticket = sequelize.define('Ticket', {
     },
   },
   tipo_pago: {
-    type: DataTypes.ENUM('contado', 'cuenta_corriente'),
+    type: DataTypes.ENUM('contado', 'cuenta_corriente', 'contado_parcial', 'cuenta_corriente_parcial', 'mercadopago_qr'),
     defaultValue: 'contado',
   },
   id_vendedor: {

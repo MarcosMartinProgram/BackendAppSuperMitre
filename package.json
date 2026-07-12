@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "migrate-tipo-pago": "node migrate-tipo-pago.js"
   },
   "keywords": [],
   "author": "",
@@ -24,7 +25,8 @@
     "node-thermal-printer": "^4.4.3",
     "nodemailer": "^7.0.5",
     "sequelize": "^6.37.7",
-    "twilio": "^5.8.0"
+    "twilio": "^5.8.0",
+    "uuid": "^14.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
