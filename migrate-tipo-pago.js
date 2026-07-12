@@ -1,5 +1,16 @@
-require('dotenv').config();
-const sequelize = require('./config/database');
+const { Sequelize } = require('sequelize');
+
+const DB_HOST = process.env.DB_HOST || 'cacmarcos.alwaysdata.net';
+const DB_NAME = process.env.DB_NAME || 'cacmarcos_supermitre';
+const DB_USER = process.env.DB_USER || 'cacmarcos_admin';
+const DB_PASSWORD = process.env.DB_PASSWORD || 'Supermitre2025!';
+
+const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
+  host: DB_HOST,
+  port: 3306,
+  dialect: 'mysql',
+  logging: false,
+});
 
 async function migrate() {
   try {
@@ -10,7 +21,7 @@ async function migrate() {
     const [result] = await sequelize.query(`
       SELECT COLUMN_TYPE 
       FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_SCHEMA = '${process.env.DB_NAME}' 
+      WHERE TABLE_SCHEMA = '${DB_NAME}' 
       AND TABLE_NAME = 'tickets' 
       AND COLUMN_NAME = 'tipo_pago'
     `);
@@ -35,7 +46,7 @@ async function migrate() {
     const [nuevo] = await sequelize.query(`
       SELECT COLUMN_TYPE 
       FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_SCHEMA = '${process.env.DB_NAME}' 
+      WHERE TABLE_SCHEMA = '${DB_NAME}' 
       AND TABLE_NAME = 'tickets' 
       AND COLUMN_NAME = 'tipo_pago'
     `);
