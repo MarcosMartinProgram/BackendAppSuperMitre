@@ -87,8 +87,9 @@ const webhook = async (req, res) => {
 // =============================================
 const consultarOrden = (orderId) => {
   return new Promise((resolve, reject) => {
-    const token = MP_ONLINE_ACCESS_TOKEN || MP_QR_ACCESS_TOKEN;
-    console.log('🔑 Token para consultar orden:', token ? 'Configurado (' + token.substring(0, 10) + '...)' : 'NO CONFIGURADO');
+    const token = MP_QR_ACCESS_TOKEN || MP_ONLINE_ACCESS_TOKEN;
+    console.log('🔑 Token QR:', MP_QR_ACCESS_TOKEN ? 'SÍ configurado' : 'NO configurado');
+    console.log('🔑 Token Online:', MP_ONLINE_ACCESS_TOKEN ? 'SÍ configurado' : 'NO configurado');
     const options = {
       hostname: 'api.mercadopago.com',
       path: `/merchant_orders/${orderId}`,
@@ -103,20 +104,23 @@ const consultarOrden = (orderId) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {
+        console.log('📡 MP respondió orden:', res.statusCode);
         try {
           const parsed = JSON.parse(data);
           if (res.statusCode >= 400) {
+            console.error('❌ Error MP orden:', res.statusCode, JSON.stringify(parsed).substring(0, 500));
             reject({ status: res.statusCode, data: parsed });
           } else {
             resolve(parsed);
           }
         } catch (e) {
+          console.error('❌ Error parseando respuesta MP:', res.statusCode, data.substring(0, 500));
           reject({ status: res.statusCode, data });
         }
       });
     });
 
-    req.on('error', reject);
+    req.on('error', (err) => { console.error('❌ Error de conexión:', err.message); reject(err); });
     req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
     req.end();
   });
