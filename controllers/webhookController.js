@@ -45,6 +45,31 @@ const webhook = async (req, res) => {
       if (paymentData) {
         await procesarPago(paymentData);
       }
+    } else if (type === 'order' && resourceId) {
+      // Pagos QR envían tipo 'order' con order ID
+      console.log('📱 Consultando orden QR:', resourceId);
+      const orderData = await consultarOrden(String(resourceId));
+      console.log('📱 Orden data:', JSON.stringify(orderData, null, 2));
+
+      if (orderData && orderData.payments && orderData.payments.length > 0) {
+        // La orden contiene los pagos asociados
+        console.log(`💳 Encontrados ${orderData.payments.length} pagos en la orden`);
+        for (const payment of orderData.payments) {
+          console.log(`💳 Pago ${payment.id}: estado=${payment.status}`);
+          if (payment.status === 'approved') {
+            await procesarPago(payment);
+          }
+        }
+      } else if (orderData && orderData.id) {
+        // Si no tiene payments embebidos, intentar consultar como pago
+        console.log('⚠️ Orden sin payments, intentando como pago:', orderData.id);
+        const paymentData = await consultarPago(String(orderData.id));
+        if (paymentData) {
+          await procesarPago(paymentData);
+        }
+      } else {
+        console.log('⚠️ No se pudo procesar la orden:', resourceId);
+      }
     }
 
     // Siempre responder 200 a MP para que no reintente
@@ -53,6 +78,45 @@ const webhook = async (req, res) => {
     console.error('💥 Error en webhook:', error.message);
     res.status(200).json({ received: true });
   }
+};
+
+// =============================================
+// CONSULTAR ORDEN POR ID (pagos QR)
+// =============================================
+const consultarOrden = (orderId) => {
+  return new Promise((resolve, reject) => {
+    const token = MP_QR_ACCESS_TOKEN || MP_ONLINE_ACCESS_TOKEN;
+    const options = {
+      hostname: 'api.mercadopago.com',
+      path: `/merchant_orders/${orderId}`,
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode >= 400) {
+            reject({ status: res.statusCode, data: parsed });
+          } else {
+            resolve(parsed);
+          }
+        } catch (e) {
+          reject({ status: res.statusCode, data });
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.end();
+  });
 };
 
 // =============================================
