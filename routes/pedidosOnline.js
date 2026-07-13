@@ -15,6 +15,55 @@ router.post('/webhook', express.raw({ type: 'application/json' }), (req, res, ne
 router.get('/webhook', webhook);
 
 // =============================================
+// REGISTRAR PEDIDO DESDE FRONTEND (QR aprobado)
+// El frontend llama esto cuando el polling detecta pago aprobado
+// =============================================
+router.post('/registrar', async (req, res) => {
+  try {
+    console.log('📥 Recibido pedido para registrar:', JSON.stringify(req.body, null, 2));
+
+    const { order_id, payment_id, total, productos, cliente_nombre, cliente_email } = req.body;
+
+    if (!order_id || !total) {
+      return res.status(400).json({ error: 'Faltan campos obligatorios: order_id, total' });
+    }
+
+    // Verificar si ya existe este pedido por order_id
+    const existente = await PedidoOnline.findOne({ where: { mp_external_reference: String(order_id) } });
+    if (existente) {
+      console.log('⚠️ Pedido ya registrado:', existente.id_pedido);
+      return res.json({ success: true, pedido: existente, duplicate: true });
+    }
+
+    const itemsFormateados = (productos || []).map(p => ({
+      nombre: p.nombre || 'Producto',
+      precio: parseFloat(p.precio) || 0,
+      cantidad: parseInt(p.cantidad) || 1,
+    }));
+
+    const pedido = await PedidoOnline.create({
+      mp_payment_id: payment_id ? String(payment_id) : null,
+      mp_external_reference: String(order_id),
+      mp_status: 'approved',
+      cliente_nombre: cliente_nombre || null,
+      cliente_email: cliente_email || null,
+      items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: parseFloat(total), cantidad: 1 }],
+      total: parseFloat(total),
+      estado: 'pendiente',
+    });
+
+    console.log('✅ Pedido registrado desde frontend:', pedido.id_pedido);
+
+    const urlWhatsApp = await notificarWhatsApp(pedido);
+
+    res.json({ success: true, pedido, url_whatsapp: urlWhatsApp });
+  } catch (error) {
+    console.error('💥 Error registrando pedido:', error.message);
+    res.status(500).json({ error: 'Error al registrar pedido' });
+  }
+});
+
+// =============================================
 // LISTAR PEDIDOS ONLINE
 // =============================================
 router.get('/', async (req, res) => {
