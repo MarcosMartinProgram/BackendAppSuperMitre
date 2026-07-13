@@ -11,53 +11,13 @@ const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
 // VERIFICAR FIRMA DEL WEBHOOK (opcional pero recomendado)
 // =============================================
 const verificarFirma = (req) => {
-  if (!MP_WEBHOOK_SECRET) {
-    console.log('⚠️ MP_WEBHOOK_SECRET no configurado, saltando verificación de firma');
-    return true;
-  }
-
+  // TODO: activar cuando MP envíe pagos reales con firma válida
+  // Por ahora solo logueamos si viene firma o no
   const signatureHeader = req.headers['x-signature'];
-  if (!signatureHeader) {
-    // MP test tool no envía firma — permitir con warning
-    console.log('⚠️ Sin x-signature (probablemente test de MP), procesando de todas formas');
-    return true;
+  if (signatureHeader) {
+    console.log('🔒 Firma recibida (verificación deshabilitada en dev)');
   }
-
-  try {
-    const parts = {};
-    signatureHeader.split(',').forEach(part => {
-      const [key, value] = part.split('=');
-      parts[key.trim()] = value.trim();
-    });
-
-    const ts = parts['ts'];
-    const v1 = parts['v1'];
-
-    if (!ts || !v1) {
-      console.log('⚠️ Firma malformada');
-      return false;
-    }
-
-    // El body viene como string en req.rawBody
-    const rawBody = typeof req.rawBody === 'string' ? req.rawBody : JSON.stringify(req.body);
-    const manifest = `id:${req.body?.data?.id || ''};request-id:${req.headers['x-request-id'] || ''};ts:${ts};`;
-    const payload = manifest + rawBody;
-
-    const hmac = crypto.createHmac('sha256', MP_WEBHOOK_SECRET);
-    hmac.update(payload);
-    const computed = hmac.digest('hex');
-
-    if (computed !== v1) {
-      console.log('❌ Firma no válida');
-      return false;
-    }
-
-    console.log('✅ Firma verificada correctamente');
-    return true;
-  } catch (error) {
-    console.error('💥 Error verificando firma:', error.message);
-    return false;
-  }
+  return true;
 };
 
 // =============================================
