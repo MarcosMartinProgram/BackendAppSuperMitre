@@ -52,15 +52,17 @@ const webhook = async (req, res) => {
         const orderData = await consultarOrden(String(resourceId));
         console.log('📱 Orden data:', JSON.stringify(orderData, null, 2));
 
-        if (orderData && orderData.payments && orderData.payments.length > 0) {
-          console.log(`💳 Encontrados ${orderData.payments.length} pagos en la orden`);
-          for (const payment of orderData.payments) {
+        const payments = orderData.payments || orderData.transactions?.payments || [];
+
+        if (payments.length > 0) {
+          console.log(`💳 Encontrados ${payments.length} pagos en la orden`);
+          for (const payment of payments) {
             console.log(`💳 Pago ${payment.id}: estado=${payment.status}`);
             if (payment.status === 'approved') {
               await procesarPago(payment);
             }
           }
-        } else if (orderData && orderData.id) {
+        } else if (orderData.id) {
           console.log('⚠️ Orden sin payments, intentando como pago:', orderData.id);
           const paymentData = await consultarPago(String(orderData.id));
           if (paymentData) {
@@ -92,7 +94,7 @@ const consultarOrden = (orderId) => {
     console.log('🔑 Token Online:', MP_ONLINE_ACCESS_TOKEN ? 'SÍ configurado' : 'NO configurado');
     const options = {
       hostname: 'api.mercadopago.com',
-      path: `/merchant_orders/${orderId}`,
+      path: `/v1/orders/${orderId}`,
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
