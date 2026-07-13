@@ -22,7 +22,7 @@ router.post('/registrar', async (req, res) => {
   try {
     console.log('📥 Recibido pedido para registrar:', JSON.stringify(req.body, null, 2));
 
-    const { order_id, payment_id, total, productos, cliente_nombre, cliente_email } = req.body;
+    const { order_id, payment_id, total, productos, cliente_nombre, cliente_email, cliente_telefono, cliente_direccion } = req.body;
 
     if (!order_id || !total) {
       return res.status(400).json({ error: 'Faltan campos obligatorios: order_id, total' });
@@ -47,6 +47,8 @@ router.post('/registrar', async (req, res) => {
       mp_status: 'approved',
       cliente_nombre: cliente_nombre || null,
       cliente_email: cliente_email || null,
+      cliente_telefono: cliente_telefono || null,
+      cliente_direccion: cliente_direccion || null,
       items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: parseFloat(total), cantidad: 1 }],
       total: parseFloat(total),
       estado: 'pendiente',

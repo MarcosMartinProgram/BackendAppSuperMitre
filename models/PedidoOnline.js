@@ -35,6 +35,10 @@ const PedidoOnline = sequelize.define('PedidoOnline', {
     type: DataTypes.STRING(30),
     allowNull: true,
   },
+  cliente_direccion: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
   items: {
     type: DataTypes.TEXT,
     allowNull: false,
