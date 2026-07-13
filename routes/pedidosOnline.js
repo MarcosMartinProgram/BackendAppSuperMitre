@@ -5,9 +5,14 @@ const { webhook, notificarWhatsApp } = require('../controllers/webhookController
 
 // =============================================
 // WEBHOOK - MercadoPago envía notificaciones aquí
+// Capturar raw body para verificar firma HMAC
 // =============================================
-router.post('/webhook', webhook);
-router.get('/webhook', webhook); // MP también puede enviar GET
+router.post('/webhook', express.raw({ type: 'application/json' }), (req, res, next) => {
+  req.rawBody = req.body.toString();
+  try { req.body = JSON.parse(req.rawBody); } catch (e) { /* keep raw */ }
+  next();
+}, webhook);
+router.get('/webhook', webhook);
 
 // =============================================
 // LISTAR PEDIDOS ONLINE

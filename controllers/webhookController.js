@@ -1,9 +1,63 @@
 const https = require('https');
+const crypto = require('crypto');
 const PedidoOnline = require('../models/PedidoOnline');
 
 const MP_QR_ACCESS_TOKEN = process.env.MP_QR_ACCESS_TOKEN;
 const MP_ONLINE_ACCESS_TOKEN = process.env.MP_ONLINE_ACCESS_TOKEN;
 const WHATSAPP_NUMERO_DUEÑO = process.env.WHATSAPP_NUMERO_DUEÑO || '5491162415387';
+const MP_WEBHOOK_SECRET = process.env.MP_WEBHOOK_SECRET;
+
+// =============================================
+// VERIFICAR FIRMA DEL WEBHOOK (opcional pero recomendado)
+// =============================================
+const verificarFirma = (req) => {
+  if (!MP_WEBHOOK_SECRET) {
+    console.log('⚠️ MP_WEBHOOK_SECRET no configurado, saltando verificación de firma');
+    return true;
+  }
+
+  const signatureHeader = req.headers['x-signature'];
+  if (!signatureHeader) {
+    console.log('⚠️ No se recibió x-signature en el header');
+    return false;
+  }
+
+  try {
+    const parts = {};
+    signatureHeader.split(',').forEach(part => {
+      const [key, value] = part.split('=');
+      parts[key.trim()] = value.trim();
+    });
+
+    const ts = parts['ts'];
+    const v1 = parts['v1'];
+
+    if (!ts || !v1) {
+      console.log('⚠️ Firma malformada');
+      return false;
+    }
+
+    // El body viene como string en req.rawBody
+    const rawBody = typeof req.rawBody === 'string' ? req.rawBody : JSON.stringify(req.body);
+    const manifest = `id:${req.body?.data?.id || ''};request-id:${req.headers['x-request-id'] || ''};ts:${ts};`;
+    const payload = manifest + rawBody;
+
+    const hmac = crypto.createHmac('sha256', MP_WEBHOOK_SECRET);
+    hmac.update(payload);
+    const computed = hmac.digest('hex');
+
+    if (computed !== v1) {
+      console.log('❌ Firma no válida');
+      return false;
+    }
+
+    console.log('✅ Firma verificada correctamente');
+    return true;
+  } catch (error) {
+    console.error('💥 Error verificando firma:', error.message);
+    return false;
+  }
+};
 
 // =============================================
 // WEBHOOK DE MERCADOPAGO
@@ -13,7 +67,11 @@ const webhook = async (req, res) => {
     console.log('\n🔔 === WEBHOOK MERCADOPAGO RECIBIDO ===');
     console.log('📋 Tipo:', req.query.type || req.body?.type);
     console.log('📋 ID:', req.query.id || req.body?.data?.id);
-    console.log('📋 Body:', JSON.stringify(req.body, null, 2));
+
+    // Verificar firma si está configurada
+    if (!verificarFirma(req)) {
+      return res.status(401).json({ error: 'Firma inválida' });
+    }
 
     // MP envía una notificación con type e id
     const type = req.query.type || req.body?.type;
