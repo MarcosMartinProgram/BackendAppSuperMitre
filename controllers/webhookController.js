@@ -174,7 +174,7 @@ const procesarPago = async (payment) => {
   try {
     console.log('💰 Procesando pago:', payment.id, '- Estado:', payment.status);
 
-    if (payment.status !== 'approved') {
+    if (payment.status !== 'approved' && payment.status !== 'processed') {
       console.log('⏳ Pago no aprobado, estado:', payment.status);
       return;
     }
@@ -186,7 +186,7 @@ const procesarPago = async (payment) => {
       return;
     }
 
-    // Extraer items del pago
+    // Extraer items del pago (puede venir de /v1/payments/ o de /v1/orders/)
     const items = payment.additional_info?.items || [];
     const itemsFormateados = items.map(item => ({
       nombre: item.title || 'Producto',
@@ -194,7 +194,18 @@ const procesarPago = async (payment) => {
       cantidad: parseInt(item.quantity) || 1,
     }));
 
-    const total = itemsFormateados.reduce((acc, item) => acc + (item.precio * item.cantidad), 0) || payment.transaction_amount;
+    // El total puede estar en transaction_amount (/v1/payments) o amount (/v1/orders/)
+    const total = itemsFormateados.reduce((acc, item) => acc + (item.precio * item.cantidad), 0)
+      || parseFloat(payment.transaction_amount)
+      || parseFloat(payment.amount)
+      || 0;
+
+    // Nombre del payer (puede no existir en órdenes QR)
+    const payerNombre = payment.payer?.first_name
+      ? `${payment.payer.first_name} ${payment.payer.last_name || ''}`.trim()
+      : null;
+    const payerEmail = payment.payer?.email || null;
+    const payerTelefono = payment.payer?.phone?.number || null;
 
     // Crear el pedido
     const pedido = await PedidoOnline.create({
@@ -202,13 +213,11 @@ const procesarPago = async (payment) => {
       mp_preference_id: payment.metadata?.preference_id || null,
       mp_external_reference: payment.external_reference || null,
       mp_status: payment.status,
-      cliente_nombre: payment.payer?.first_name
-        ? `${payment.payer.first_name} ${payment.payer.last_name || ''}`.trim()
-        : null,
-      cliente_email: payment.payer?.email || null,
-      cliente_telefono: payment.payer?.phone?.number || null,
+      cliente_nombre: payerNombre,
+      cliente_email: payerEmail,
+      cliente_telefono: payerTelefono,
       items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: total, cantidad: 1 }],
-      total: total || payment.transaction_amount,
+      total: total,
       estado: 'pendiente',
     });
 
