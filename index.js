@@ -10,6 +10,7 @@ const Producto = require('./models/Producto');
 // ✅ AGREGAR LOS NUEVOS MODELOS
 const Cliente = require('./models/Cliente');
 const MovimientoCuentaCorriente = require('./models/MovimientoCuentaCorriente');
+const PedidoOnline = require('./models/PedidoOnline');
 
 const mercadoPagoRoutes = require('./routes/mercadoPagoRoutes');
 const clienteRoutes = require('./routes/clientes');
@@ -20,6 +21,7 @@ const ticketRoutes = require('./routes/tickets');
 const productoRoutes = require('./routes/productos');
 const reportesRoutes = require('./routes/reportes');
 const imagenAndroidRoutes = require("./routes/imagenAndroidRoutes");
+const pedidosOnlineRoutes = require('./routes/pedidosOnline');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -98,6 +100,7 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use("/api/mercadopago", mercadoPagoRoutes);
 app.use("/api/imagenAndroid", imagenAndroidRoutes);
+app.use("/api/pedidos-online", pedidosOnlineRoutes);
 
 // ✅ RUTA DE PRUEBA CORS
 app.get('/api/test-cors', (req, res) => {
@@ -242,7 +245,8 @@ app.listen(PORT, () => {
   console.log(`🔗 API disponible en: http://localhost:${PORT}`);
   console.log("🔐 Variables de entorno:");
   console.log("- DB_HOST:", process.env.DB_HOST ? "✅" : "❌");
-  console.log("- MP_ACCESS_TOKEN:", process.env.MP_ACCESS_TOKEN ? "✅" : "❌");
+  console.log("- MP_ONLINE_ACCESS_TOKEN:", process.env.MP_ONLINE_ACCESS_TOKEN ? "✅" : "❌");
+  console.log("- MP_QR_ACCESS_TOKEN:", process.env.MP_QR_ACCESS_TOKEN ? "✅" : "❌");
   console.log("- SECRET_KEY:", process.env.SECRET_KEY ? "✅" : "❌");
   console.log('🌍 CORS habilitado para:', corsOptions.origin);
 });

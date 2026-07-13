@@ -3,20 +3,25 @@ const { MercadoPagoConfig, Preference } = require("mercadopago");
 const { v4: uuidv4 } = require("uuid");
 const https = require("https");
 
-const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN;
+// Token para pagos online (pasarela checkout)
+const MP_ONLINE_ACCESS_TOKEN = process.env.MP_ONLINE_ACCESS_TOKEN;
+// Token para QR de caja (pagos presenciales)
+const MP_QR_ACCESS_TOKEN = process.env.MP_QR_ACCESS_TOKEN;
 const MP_POS_EXTERNAL_ID = process.env.MP_POS_EXTERNAL_ID || "CAJA001";
 
-console.log("🔐 MP ACCESS TOKEN:", MP_ACCESS_TOKEN ? "✅ Configurado" : "❌ No configurado");
+console.log("🔐 MP ONLINE TOKEN:", MP_ONLINE_ACCESS_TOKEN ? "✅ Configurado" : "❌ No configurado");
+console.log("🔐 MP QR TOKEN:", MP_QR_ACCESS_TOKEN ? "✅ Configurado" : "❌ No configurado");
 
-const client = new MercadoPagoConfig({
-    accessToken: MP_ACCESS_TOKEN,
+// Client SDK para pagos online (preferencias)
+const clientOnline = new MercadoPagoConfig({
+    accessToken: MP_ONLINE_ACCESS_TOKEN,
     options: {
         timeout: 10000,
         idempotencyKey: Date.now().toString()
     }
 });
 
-// Helper para hacer requests directos a la API de MP (Orders API v1)
+// Helper para hacer requests directos a la API de MP (Orders API - QR)
 const mpRequest = (method, path, body = null) => {
     return new Promise((resolve, reject) => {
         const options = {
@@ -25,7 +30,7 @@ const mpRequest = (method, path, body = null) => {
             method: method,
             headers: {
                 "Content-Type": "application/json",
-                "Authorization": `Bearer ${MP_ACCESS_TOKEN}`,
+                "Authorization": `Bearer ${MP_QR_ACCESS_TOKEN}`,
                 "X-Idempotency-Key": uuidv4()
             }
         };
@@ -81,7 +86,7 @@ const crearPreferencia = async (req, res) => {
         const isProduction = req.get("host").includes("alwaysdata.net");
         const baseUrl = isProduction ? "https://supermitre.com.ar" : "http://localhost:3000";
 
-        const preference = new Preference(client);
+        const preference = new Preference(clientOnline);
         const response = await preference.create({
             body: {
                 items,
