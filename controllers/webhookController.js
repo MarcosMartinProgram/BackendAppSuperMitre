@@ -48,34 +48,36 @@ const webhook = async (req, res) => {
     } else if (type === 'order' && resourceId) {
       // Pagos QR envían tipo 'order' con order ID
       console.log('📱 Consultando orden QR:', resourceId);
-      const orderData = await consultarOrden(String(resourceId));
-      console.log('📱 Orden data:', JSON.stringify(orderData, null, 2));
+      try {
+        const orderData = await consultarOrden(String(resourceId));
+        console.log('📱 Orden data:', JSON.stringify(orderData, null, 2));
 
-      if (orderData && orderData.payments && orderData.payments.length > 0) {
-        // La orden contiene los pagos asociados
-        console.log(`💳 Encontrados ${orderData.payments.length} pagos en la orden`);
-        for (const payment of orderData.payments) {
-          console.log(`💳 Pago ${payment.id}: estado=${payment.status}`);
-          if (payment.status === 'approved') {
-            await procesarPago(payment);
+        if (orderData && orderData.payments && orderData.payments.length > 0) {
+          console.log(`💳 Encontrados ${orderData.payments.length} pagos en la orden`);
+          for (const payment of orderData.payments) {
+            console.log(`💳 Pago ${payment.id}: estado=${payment.status}`);
+            if (payment.status === 'approved') {
+              await procesarPago(payment);
+            }
           }
+        } else if (orderData && orderData.id) {
+          console.log('⚠️ Orden sin payments, intentando como pago:', orderData.id);
+          const paymentData = await consultarPago(String(orderData.id));
+          if (paymentData) {
+            await procesarPago(paymentData);
+          }
+        } else {
+          console.log('⚠️ No se pudo procesar la orden:', resourceId);
         }
-      } else if (orderData && orderData.id) {
-        // Si no tiene payments embebidos, intentar consultar como pago
-        console.log('⚠️ Orden sin payments, intentando como pago:', orderData.id);
-        const paymentData = await consultarPago(String(orderData.id));
-        if (paymentData) {
-          await procesarPago(paymentData);
-        }
-      } else {
-        console.log('⚠️ No se pudo procesar la orden:', resourceId);
+      } catch (orderError) {
+        console.error('💥 Error consultando orden QR:', JSON.stringify(orderError));
       }
     }
 
     // Siempre responder 200 a MP para que no reintente
     res.status(200).json({ received: true });
   } catch (error) {
-    console.error('💥 Error en webhook:', error.message);
+    console.error('💥 Error en webhook:', error.message || JSON.stringify(error));
     res.status(200).json({ received: true });
   }
 };
@@ -85,7 +87,8 @@ const webhook = async (req, res) => {
 // =============================================
 const consultarOrden = (orderId) => {
   return new Promise((resolve, reject) => {
-    const token = MP_QR_ACCESS_TOKEN || MP_ONLINE_ACCESS_TOKEN;
+    const token = MP_ONLINE_ACCESS_TOKEN || MP_QR_ACCESS_TOKEN;
+    console.log('🔑 Token para consultar orden:', token ? 'Configurado (' + token.substring(0, 10) + '...)' : 'NO CONFIGURADO');
     const options = {
       hostname: 'api.mercadopago.com',
       path: `/merchant_orders/${orderId}`,

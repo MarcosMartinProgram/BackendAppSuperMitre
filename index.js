@@ -226,18 +226,16 @@ const establecerRelaciones = () => {
 };
 
 // Sincronizar base de datos
-/*sequelize.sync({ force: false }) // Cambiar a true solo para desarrollo
-  then(() => {
+sequelize.sync({ force: false })
+  .then(() => {
     console.log('✅ Modelos sincronizados con la base de datos.');
-    // ✅ ESTABLECER RELACIONES DESPUÉS DE SINCRONIZAR
     establecerRelaciones();
   })
   .catch((err) => {
-    console.error('❌ Error al sincronizar la base de datos:', err);
-    // ✅ CONTINUAR EJECUTANDO AUNQUE FALLE LA SINCRONIZACIÓN
+    console.error('❌ Error al sincronizar la base de datos:', err.message);
     console.log('⚠️  Continuando sin sincronización automática...');
     establecerRelaciones();
-  });*/
+  });
 
 // Levantar servidor
 app.listen(PORT, () => {
