@@ -39,6 +39,14 @@ const PedidoOnline = sequelize.define('PedidoOnline', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  id_usuario: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    references: {
+      model: 'usuarios',
+      key: 'id_usuario',
+    },
+  },
   items: {
     type: DataTypes.TEXT,
     allowNull: false,

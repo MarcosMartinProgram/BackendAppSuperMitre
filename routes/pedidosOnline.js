@@ -22,7 +22,7 @@ router.post('/registrar', async (req, res) => {
   try {
     console.log('📥 Recibido pedido para registrar:', JSON.stringify(req.body, null, 2));
 
-    const { order_id, payment_id, total, productos, cliente_nombre, cliente_email, cliente_telefono, cliente_direccion } = req.body;
+    const { order_id, payment_id, total, productos, cliente_nombre, cliente_email, cliente_telefono, cliente_direccion, id_usuario } = req.body;
 
     if (!order_id || !total) {
       return res.status(400).json({ error: 'Faltan campos obligatorios: order_id, total' });
@@ -49,6 +49,7 @@ router.post('/registrar', async (req, res) => {
       cliente_email: cliente_email || null,
       cliente_telefono: cliente_telefono || null,
       cliente_direccion: cliente_direccion || null,
+      id_usuario: id_usuario || null,
       items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: parseFloat(total), cantidad: 1 }],
       total: parseFloat(total),
       estado: 'pendiente',
@@ -83,6 +84,29 @@ router.get('/', async (req, res) => {
     res.json(pedidos);
   } catch (error) {
     console.error('Error al listar pedidos:', error.message);
+    res.status(500).json({ error: 'Error al obtener pedidos' });
+  }
+});
+
+// =============================================
+// MIS PEDIDOS - por id_usuario
+// =============================================
+router.get('/mis-pedidos', async (req, res) => {
+  try {
+    const { id_usuario } = req.query;
+    if (!id_usuario) {
+      return res.status(400).json({ error: 'id_usuario requerido' });
+    }
+
+    const pedidos = await PedidoOnline.findAll({
+      where: { id_usuario: parseInt(id_usuario) },
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+
+    res.json(pedidos);
+  } catch (error) {
+    console.error('Error al listar mis pedidos:', error.message);
     res.status(500).json({ error: 'Error al obtener pedidos' });
   }
 });

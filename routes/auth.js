@@ -66,7 +66,9 @@ router.post('/login', async (req, res) => {
       id: user.id_usuario,
       nombre: user.nombre,
       email: user.email,
-      rol: user.rol
+      rol: user.rol,
+      numero_whatsapp: user.numero_whatsapp || null,
+      direccion: user.direccion || null,
     };
 
     const token = jwt.sign(tokenPayload, SECRET_KEY, { expiresIn: '24h' });
@@ -125,6 +127,14 @@ router.post('/register', async (req, res) => {
       });
     }
 
+    // Para clientes, whatsapp y dirección son obligatorios
+    const rolFinal = (rol && (rol === 'master' || rol === 'vendedor')) ? rol : 'cliente';
+    if (rolFinal === 'cliente' && (!numero_whatsapp || !direccion)) {
+      return res.status(400).json({ 
+        error: 'Para clientes, los campos WhatsApp y Dirección son obligatorios' 
+      });
+    }
+
     // ✅ VERIFICAR SI YA EXISTE
     const existingUser = await Usuario.findOne({ 
       where: { email: email.toLowerCase() } 
@@ -175,7 +185,9 @@ router.post('/register', async (req, res) => {
       id: newUser.id_usuario,
       nombre: newUser.nombre,
       email: newUser.email,
-      rol: newUser.rol
+      rol: newUser.rol,
+      numero_whatsapp: newUser.numero_whatsapp || null,
+      direccion: newUser.direccion || null,
     };
 
     const token = jwt.sign(tokenPayload, SECRET_KEY, { expiresIn: '24h' });
