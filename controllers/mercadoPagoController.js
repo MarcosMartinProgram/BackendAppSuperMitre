@@ -108,30 +108,34 @@ const crearPreferencia = async (req, res) => {
             }
         });
 
-        const itemsFormateados = carrito.map(p => ({
-            nombre: p.nombre || 'Producto',
-            precio: parseFloat(p.precio) || 0,
-            cantidad: parseInt(p.cantidad) || 1,
-        }));
+        try {
+            const itemsFormateados = carrito.map(p => ({
+                nombre: p.nombre || 'Producto',
+                precio: parseFloat(p.precio) || 0,
+                cantidad: parseInt(p.cantidad) || 1,
+            }));
 
-        const total = itemsFormateados.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+            const total = itemsFormateados.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
 
-        await PedidoOnline.create({
-            mp_external_reference: externalRef,
-            mp_preference_id: String(response.id),
-            mp_status: 'pending',
-            cliente_nombre: cliente_nombre || null,
-            cliente_email: cliente_email || null,
-            cliente_telefono: cliente_telefono || null,
-            cliente_direccion: cliente_direccion || null,
-            id_usuario: id_usuario || null,
-            items: itemsFormateados,
-            total: total,
-            estado: 'pendiente',
-            origen: origen || 'web',
-        });
+            await PedidoOnline.create({
+                mp_external_reference: externalRef,
+                mp_preference_id: String(response.id),
+                mp_status: 'pending',
+                cliente_nombre: cliente_nombre || null,
+                cliente_email: cliente_email || null,
+                cliente_telefono: cliente_telefono || null,
+                cliente_direccion: cliente_direccion || null,
+                id_usuario: id_usuario || null,
+                items: itemsFormateados,
+                total: total,
+                estado: 'pendiente',
+                origen: origen || 'web',
+            });
 
-        console.log('✅ Pedido pre-registrado:', externalRef);
+            console.log('✅ Pedido pre-registrado:', externalRef);
+        } catch (preErr) {
+            console.error('⚠️ Error pre-registrando pedido (no bloqueante):', preErr.message);
+        }
 
         res.json({ success: true, id: response.id, init_point: response.init_point, sandbox_init_point: response.sandbox_init_point });
     } catch (error) {
