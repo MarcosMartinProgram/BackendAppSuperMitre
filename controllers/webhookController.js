@@ -186,6 +186,11 @@ const procesarPago = async (payment) => {
       return;
     }
 
+    // Buscar pedido pre-registrado por external_reference
+    const existenteRef = payment.external_reference
+      ? await PedidoOnline.findOne({ where: { mp_external_reference: String(payment.external_reference) } })
+      : null;
+
     // Extraer items del pago (puede venir de /v1/payments/ o de /v1/orders/)
     const items = payment.additional_info?.items || [];
     const itemsFormateados = items.map(item => ({
@@ -207,21 +212,34 @@ const procesarPago = async (payment) => {
     const payerEmail = payment.payer?.email || null;
     const payerTelefono = payment.payer?.phone?.number || null;
 
-    // Crear el pedido
-    const pedido = await PedidoOnline.create({
-      mp_payment_id: String(payment.id),
-      mp_preference_id: payment.metadata?.preference_id || null,
-      mp_external_reference: payment.external_reference || null,
-      mp_status: payment.status,
-      cliente_nombre: payerNombre,
-      cliente_email: payerEmail,
-      cliente_telefono: payerTelefono,
-      items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: total, cantidad: 1 }],
-      total: total,
-      estado: 'pendiente',
-    });
-
-    console.log('✅ Pedido creado:', pedido.id_pedido);
+    // Crear o actualizar el pedido
+    let pedido;
+    if (existenteRef) {
+      await existenteRef.update({
+        mp_payment_id: String(payment.id),
+        mp_status: payment.status,
+        cliente_nombre: existenteRef.cliente_nombre || payerNombre,
+        cliente_email: existenteRef.cliente_email || payerEmail,
+        cliente_telefono: existenteRef.cliente_telefono || payerTelefono,
+      });
+      pedido = existenteRef;
+      console.log('✅ Pedido pre-registrado actualizado:', pedido.id_pedido);
+    } else {
+      pedido = await PedidoOnline.create({
+        mp_payment_id: String(payment.id),
+        mp_preference_id: payment.metadata?.preference_id || null,
+        mp_external_reference: payment.external_reference || null,
+        mp_status: payment.status,
+        cliente_nombre: payerNombre,
+        cliente_email: payerEmail,
+        cliente_telefono: payerTelefono,
+        items: itemsFormateados.length > 0 ? itemsFormateados : [{ nombre: 'Pedido', precio: total, cantidad: 1 }],
+        total: total,
+        estado: 'pendiente',
+        origen: 'web',
+      });
+      console.log('✅ Pedido creado desde webhook:', pedido.id_pedido);
+    }
 
     // Enviar WhatsApp al dueño
     await notificarWhatsApp(pedido);
@@ -248,6 +266,7 @@ const notificarWhatsApp = async (pedido) => {
       `🛒 *¡Nuevo Pedido Online!*`,
       ``,
       `📋 Pedido #${pedido.id_pedido}`,
+      pedido.origen ? `📱 Origen: ${pedido.origen === 'app_movil' ? 'App Móvil' : pedido.origen === 'web' ? 'Sitio Web' : pedido.origen}` : null,
       `👤 ${pedido.cliente_nombre || 'Cliente'}`,
       pedido.cliente_telefono ? `📱 WhatsApp: ${pedido.cliente_telefono}` : null,
       pedido.cliente_direccion ? `📍 Dirección: ${pedido.cliente_direccion}` : null,

@@ -74,6 +74,11 @@ const PedidoOnline = sequelize.define('PedidoOnline', {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  origen: {
+    type: DataTypes.STRING(30),
+    defaultValue: 'web',
+    allowNull: false,
+  },
 }, {
   tableName: 'pedidos_online',
   timestamps: true,

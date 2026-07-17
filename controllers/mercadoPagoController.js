@@ -2,6 +2,7 @@
 const { MercadoPagoConfig, Preference } = require("mercadopago");
 const { v4: uuidv4 } = require("uuid");
 const https = require("https");
+const PedidoOnline = require("../models/PedidoOnline");
 
 // Token para pagos online (pasarela checkout)
 const MP_ONLINE_ACCESS_TOKEN = process.env.MP_ONLINE_ACCESS_TOKEN;
@@ -65,7 +66,7 @@ const mpRequest = (method, path, body = null) => {
 const crearPreferencia = async (req, res) => {
     try {
         console.log("\n🛒 === INICIANDO PROCESO DE PAGO ===");
-        const { carrito } = req.body;
+        const { carrito, cliente_nombre, cliente_email, cliente_telefono, cliente_direccion, id_usuario, origen } = req.body;
 
         if (!carrito || !Array.isArray(carrito) || carrito.length === 0) {
             return res.status(400).json({ error: "Carrito inválido o vacío" });
@@ -83,6 +84,8 @@ const crearPreferencia = async (req, res) => {
             return res.status(400).json({ error: "No hay productos válidos" });
         }
 
+        const externalRef = `SM-${Date.now()}`;
+
         const isProduction = req.get("host").includes("alwaysdata.net");
         const baseUrl = isProduction ? "https://supermitre.com.ar" : "http://localhost:3000";
 
@@ -97,13 +100,38 @@ const crearPreferencia = async (req, res) => {
                 },
                 auto_return: "approved",
                 statement_descriptor: "SUPER MITRE",
-                external_reference: `SM-${Date.now()}`,
+                external_reference: externalRef,
                 expires: true,
                 expiration_date_from: new Date().toISOString(),
                 expiration_date_to: new Date(Date.now() + 86400000).toISOString(),
                 payment_methods: { installments: 12 }
             }
         });
+
+        const itemsFormateados = carrito.map(p => ({
+            nombre: p.nombre || 'Producto',
+            precio: parseFloat(p.precio) || 0,
+            cantidad: parseInt(p.cantidad) || 1,
+        }));
+
+        const total = itemsFormateados.reduce((acc, item) => acc + (item.precio * item.cantidad), 0);
+
+        await PedidoOnline.create({
+            mp_external_reference: externalRef,
+            mp_preference_id: String(response.id),
+            mp_status: 'pending',
+            cliente_nombre: cliente_nombre || null,
+            cliente_email: cliente_email || null,
+            cliente_telefono: cliente_telefono || null,
+            cliente_direccion: cliente_direccion || null,
+            id_usuario: id_usuario || null,
+            items: itemsFormateados,
+            total: total,
+            estado: 'pendiente',
+            origen: origen || 'web',
+        });
+
+        console.log('✅ Pedido pre-registrado:', externalRef);
 
         res.json({ success: true, id: response.id, init_point: response.init_point, sandbox_init_point: response.sandbox_init_point });
     } catch (error) {
