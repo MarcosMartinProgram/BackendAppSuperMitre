@@ -187,9 +187,17 @@ const procesarPago = async (payment) => {
     }
 
     // Buscar pedido pre-registrado por external_reference
-    const existenteRef = payment.external_reference
+    let existenteRef = payment.external_reference
       ? await PedidoOnline.findOne({ where: { mp_external_reference: String(payment.external_reference) } })
       : null;
+
+    // Si no se encontro por external_reference, buscar el ultimo pedido pendiente por usuario
+    if (!existenteRef && payment.external_reference) {
+      existenteRef = await PedidoOnline.findOne({
+        where: { mp_status: 'pending', estado: 'pendiente' },
+        order: [['created_at', 'DESC']],
+      });
+    }
 
     // Extraer items del pago (puede venir de /v1/payments/ o de /v1/orders/)
     const items = payment.additional_info?.items || [];
