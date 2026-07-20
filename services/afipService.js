@@ -1,6 +1,13 @@
 const fs = require('fs');
 const path = require('path');
-const forge = require('node-forge');
+
+let forge;
+try {
+  forge = require('node-forge');
+} catch (e) {
+  console.warn('⚠️ node-forge no instalado. Facturación electrónica no disponible. Ejecutá: npm install node-forge');
+  forge = null;
+}
 
 // ==================== CONFIGURACIÓN ====================
 
@@ -137,6 +144,9 @@ function generarTRA(service) {
 // ==================== FIRMA CMS (PKCS#7) ====================
 
 function firmarCMS(traXml, certPath, keyPath) {
+  if (!forge) {
+    throw new Error('node-forge no está instalado. Ejecutá: npm install node-forge');
+  }
   const certPem = fs.readFileSync(certPath, 'utf8');
   const keyPem = fs.readFileSync(keyPath, 'utf8');
 
