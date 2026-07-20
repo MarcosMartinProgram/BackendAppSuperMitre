@@ -462,10 +462,11 @@ async function solicitarCAE(token, sign, cuit, datos) {
   // Buscar resultado del detalle
   const detMatch = resultXml.match(/<FECAEDetResponse>([\s\S]*?)<\/FECAEDetResponse>/);
   if (!detMatch) {
-    throw new Error('No se encontró FECAEDetResponse');
+    throw new Error('No se encontró FECAEDetResponse. Respuesta: ' + resultXml.substring(0, 500));
   }
 
   const detXml = detMatch[1];
+  console.log('📋 Respuesta completa WSFE:', detXml);
   const campos = parseXmlSimple(detXml);
 
   const resultado = campos.Resultado; // A=Aprobado, R=Rechazado, O=Observado
@@ -498,6 +499,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
       aprobado: false,
       resultado,
       observaciones: obs,
+      xmlRespuesta: detXml.substring(0, 1000),
     };
   }
 }

@@ -162,6 +162,7 @@ router.post('/solicitar-cae', async (req, res) => {
         error: 'CAE rechazado/observado',
         resultado: resultado.resultado,
         observaciones: resultado.observaciones,
+        xmlRespuesta: resultado.xmlRespuesta,
       });
     }
 
