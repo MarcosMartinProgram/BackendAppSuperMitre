@@ -21,14 +21,16 @@ const WSFE_URL = {
   produccion: 'https://wsfe.afip.gov.ar/wsfev1/service.asmx',
 };
 
+const BASE_CERT_DIR = path.join(__dirname, '..', 'certs');
+
 const CERT_PATHS = {
   homologacion: {
-    cert: 'D:/llaves/HomologacionTesting/supermitre.crt',
-    key: 'D:/llaves/HomologacionTesting/privada.key',
+    cert: path.join(BASE_CERT_DIR, 'homologacion', 'supermitre.crt'),
+    key: path.join(BASE_CERT_DIR, 'homologacion', 'privada.key'),
   },
   produccion: {
-    cert: 'D:/llaves/Produccion/supermitre_183515000a1d65eb.crt',
-    key: 'D:/llaves/Produccion/privada.key',
+    cert: path.join(BASE_CERT_DIR, 'produccion', 'supermitre_183515000a1d65eb.crt'),
+    key: path.join(BASE_CERT_DIR, 'produccion', 'privada.key'),
   },
 };
 
