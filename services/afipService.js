@@ -40,27 +40,31 @@ let uniqueIdCounter = Date.now() % 1000000;
 
 // ==================== UTILIDADES ====================
 
-function formatDate(date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const mi = String(date.getMinutes()).padStart(2, '0');
-  const ss = String(date.getSeconds()).padStart(2, '0');
+function formatDateArgentina(date) {
+  // Alwaysdata usa UTC, AFIP espera hora Argentina (UTC-3)
+  const argTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  const yyyy = argTime.getUTCFullYear();
+  const mm = String(argTime.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(argTime.getUTCDate()).padStart(2, '0');
+  const hh = String(argTime.getUTCHours()).padStart(2, '0');
+  const mi = String(argTime.getUTCMinutes()).padStart(2, '0');
+  const ss = String(argTime.getUTCSeconds()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}`;
 }
 
 function formatFechaComp(date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
+  const argTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  const yyyy = argTime.getUTCFullYear();
+  const mm = String(argTime.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(argTime.getUTCDate()).padStart(2, '0');
   return `${yyyy}${mm}${dd}`;
 }
 
 function formatFechaQR(date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
+  const argTime = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+  const yyyy = argTime.getUTCFullYear();
+  const mm = String(argTime.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(argTime.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 }
 
@@ -142,8 +146,8 @@ function generarTRA(service) {
 <loginTicketRequest version="1.0">
   <header>
     <uniqueId>${uniqueIdCounter}</uniqueId>
-    <generationTime>${formatDate(genTime)}</generationTime>
-    <expirationTime>${formatDate(expTime)}</expirationTime>
+    <generationTime>${formatDateArgentina(genTime)}</generationTime>
+    <expirationTime>${formatDateArgentina(expTime)}</expirationTime>
   </header>
   <service>${service}</service>
 </loginTicketRequest>`;
