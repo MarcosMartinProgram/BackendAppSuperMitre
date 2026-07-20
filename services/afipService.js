@@ -170,7 +170,8 @@ function firmarCMS(traXml, certPath, keyPath) {
   });
   p7.sign({ detached: false });
 
-  return forge.util.encode64(p7.toDer().getBytes());
+  const derBytes = forge.asn1.toDer(p7.toAsn1()).getBytes();
+  return forge.util.encode64(derBytes);
 }
 
 // ==================== WSAA - OBTENER TICKET DE ACCESO ====================
