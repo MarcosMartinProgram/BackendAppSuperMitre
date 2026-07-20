@@ -65,6 +65,32 @@ const Ticket = sequelize.define('Ticket', {
     defaultValue: 'pendiente',
     comment: 'Estado de pago del ticket en cuenta corriente'
   },
+  // ✅ AFIP/ARCA - Facturación Electrónica
+  cae: {
+    type: DataTypes.STRING(14),
+    allowNull: true,
+    comment: 'Código de Autorización Electrónico (14 dígitos)',
+  },
+  vencimiento_cae: {
+    type: DataTypes.STRING(8),
+    allowNull: true,
+    comment: 'Fecha vencimiento CAE (YYYYMMDD)',
+  },
+  tipo_comprobante_afip: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Tipo comprobante AFIP: 1=FactA, 6=FactB, 11=FactC, etc.',
+  },
+  numero_comprobante_afip: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    comment: 'Número de comprobante autorizado por AFIP',
+  },
+  qr_afip_url: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+    comment: 'URL del QR verificable de ARCA',
+  },
 }, {
   tableName: 'tickets',
   timestamps: false,

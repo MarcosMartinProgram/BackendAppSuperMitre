@@ -22,6 +22,7 @@ const productoRoutes = require('./routes/productos');
 const reportesRoutes = require('./routes/reportes');
 const imagenAndroidRoutes = require("./routes/imagenAndroidRoutes");
 const pedidosOnlineRoutes = require('./routes/pedidosOnline');
+const facturacionRoutes = require('./routes/facturacion');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -101,6 +102,7 @@ app.use('/api/reportes', reportesRoutes);
 app.use("/api/mercadopago", mercadoPagoRoutes);
 app.use("/api/imagenAndroid", imagenAndroidRoutes);
 app.use("/api/pedidos-online", pedidosOnlineRoutes);
+app.use("/api/facturacion", facturacionRoutes);
 
 // ✅ RUTA DE PRUEBA CORS
 app.get('/api/test-cors', (req, res) => {
@@ -246,6 +248,9 @@ app.listen(PORT, () => {
   console.log("- MP_ONLINE_ACCESS_TOKEN:", process.env.MP_ONLINE_ACCESS_TOKEN ? "✅" : "❌");
   console.log("- MP_QR_ACCESS_TOKEN:", process.env.MP_QR_ACCESS_TOKEN ? "✅" : "❌");
   console.log("- SECRET_KEY:", process.env.SECRET_KEY ? "✅" : "❌");
+  console.log("- AFIP_CUIT:", process.env.AFIP_CUIT ? "✅" : "❌");
+  console.log("- AFIP_PTO_VTA:", process.env.AFIP_PTO_VTA || "1");
+  console.log("- AFIP_MODE:", process.env.AFIP_MODE || "homologacion");
   console.log('🌍 CORS habilitado para:', corsOptions.origin);
 });
 
