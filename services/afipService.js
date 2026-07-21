@@ -18,7 +18,7 @@ const WSAA_URL = {
 
 const WSFE_URL = {
   homologacion: 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx',
-  produccion: 'https://wsfe.afip.gov.ar/wsfev1/service.asmx',
+  produccion: 'https://servicios1.afip.gov.ar/wsfev1/service.asmx',
 };
 
 const BASE_CERT_DIR = path.join(__dirname, '..', 'certs');

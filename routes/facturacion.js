@@ -18,7 +18,7 @@ router.get('/config', async (req, res) => {
       puntoVenta: ptoVta,
       certificados,
       wsfeUrl: mode === 'produccion'
-        ? 'https://wsfe.afip.gov.ar/wsfev1/service.asmx'
+        ? 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
         : 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx',
     });
   } catch (err) {
