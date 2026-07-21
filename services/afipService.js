@@ -327,6 +327,7 @@ async function consultarUltimoComprobante(token, sign, cuit, ptoVta, cbteTipo) {
   });
 
   const respuesta = await response.text();
+  console.log(`📥 Respuesta FECompUltimoAutorizado:\n${respuesta}`);
 
   if (!response.ok) {
     throw new Error(`WSFE HTTP ${response.status}`);
@@ -429,8 +430,10 @@ async function solicitarCAE(token, sign, cuit, datos) {
   </soap:Body>
 </soap:Envelope>`;
 
-  console.log(`📄 Solicitando CAE: tipo=${tipoComprobante}, ptoVta=${puntoVenta}, nro=${numeroComprobante}`);
-  console.log(`   Importe total: $${separarDecimales(importeTotal)}, Neto: $${separarDecimales(impNeto)}, IVA: $${separarDecimales(impIVA)}`);
+  console.log(`📄 Solicitando CAE: tipo=${tipoComprobante}, ptoVta=${puntoVenta}, nro=${numeroComprobante}, fecha=${fechaEmision}`);
+  console.log(`   Importe total: $${separarDecimales(importeTotal)}, Neto: $${separarDecimales(impNeto)}, IVA: $${separarDecimales(impIVA)}, Conc: $${separarDecimales(impTotConc)}, Ex: $${separarDecimales(impOpEx)}, Trib: $${separarDecimales(impTrib)}`);
+  console.log(`   DocTipo=${docTipo}, DocNro=${docNro}, CondIVAReceptor=${condicionIVAReceptorId}, Concepto=1`);
+  console.log(`   XML FECAESolicitar:\n${soapXml}`);
 
   const response = await fetch(wsfeUrl, {
     method: 'POST',
@@ -442,9 +445,10 @@ async function solicitarCAE(token, sign, cuit, datos) {
   });
 
   const respuesta = await response.text();
+  console.log(`📥 Respuesta WSFE (HTTP ${response.status}):\n${respuesta}`);
 
   if (!response.ok) {
-    throw new Error(`WSFE HTTP ${response.status}`);
+    throw new Error(`WSFE HTTP ${response.status}: ${respuesta.substring(0, 500)}`);
   }
 
   // Parsear respuesta
@@ -460,9 +464,29 @@ async function solicitarCAE(token, sign, cuit, datos) {
   const resultXml = resultMatch[1];
   console.log('📋 Resultado FECAESolicitar completo:', resultXml);
 
+  // Buscar errores a nivel del FECAESolicitarResult (bloque <Errors> fuera de FECAEDetResponse)
+  const globalErrors = [];
+  const errGlobalRegex = /<Errors>[\s\S]*?<Err>[\s\S]*?<Code>(\d+)<\/Code>[\s\S]*?<Msg>([\s\S]*?)<\/Msg>[\s\S]*?<\/Err>[\s\S]*?<\/Errors>/g;
+  let errGlobal;
+  while ((errGlobal = errGlobalRegex.exec(resultXml)) !== null) {
+    globalErrors.push({ code: errGlobal[1], msg: errGlobal[2].trim(), tipo: 'error_global' });
+  }
+  if (globalErrors.length > 0) {
+    console.error('❌ Errores globales AFIP:', globalErrors);
+  }
+
   // Buscar resultado del detalle
   const detMatch = resultXml.match(/<FECAEDetResponse>([\s\S]*?)<\/FECAEDetResponse>/);
   if (!detMatch) {
+    // Si hay errores globales, devolverlos en vez de lanzar excepción
+    if (globalErrors.length > 0) {
+      return {
+        aprobado: false,
+        resultado: 'R',
+        observaciones: globalErrors,
+        xmlRespuesta: resultXml.substring(0, 1000),
+      };
+    }
     throw new Error('No se encontró FECAEDetResponse. Respuesta: ' + resultXml.substring(0, 500));
   }
 

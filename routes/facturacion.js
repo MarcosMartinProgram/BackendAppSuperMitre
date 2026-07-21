@@ -138,9 +138,11 @@ router.post('/solicitar-cae', async (req, res) => {
     const ultimo = await afipService.consultarUltimoComprobante(token, sign, cuit, ptoVta, cbteTipo);
     const proximoNumero = ultimo + 1;
 
-    // 7. Formatear fecha actual Argentina (no la del ticket)
-    const nowArgentina = new Date(Date.now() - 3 * 60 * 60 * 1000);
-    const fechaEmision = afipService.formatFechaComp(nowArgentina);
+    // 7. Formatear fecha actual Argentina (formatFechaComp ya convierte UTC→ART)
+    const nowUtc = new Date();
+    const fechaEmision = afipService.formatFechaComp(nowUtc);
+
+    console.log(`📅 Fecha emisión: ${fechaEmision} (UTC: ${nowUtc.toISOString()})`);
 
     // 8. Solicitar CAE
     const resultado = await afipService.solicitarCAE(token, sign, cuit, {
@@ -158,6 +160,7 @@ router.post('/solicitar-cae', async (req, res) => {
     });
 
     if (!resultado.aprobado) {
+      console.error('❌ Detalle rechazo AFIP:', JSON.stringify(resultado, null, 2));
       return res.status(400).json({
         error: 'CAE rechazado/observado',
         resultado: resultado.resultado,
@@ -173,7 +176,7 @@ router.post('/solicitar-cae', async (req, res) => {
       tipoComprobante: cbteTipo,
       numeroComprobante: proximoNumero,
       importeTotal,
-      fechaEmision: afipService.formatFechaQR(nowArgentina),
+      fechaEmision: afipService.formatFechaQR(nowUtc),
       cae: resultado.cae,
       tipoDocRec: docTipoFinal,
       nroDocRec: docNroFinal,
