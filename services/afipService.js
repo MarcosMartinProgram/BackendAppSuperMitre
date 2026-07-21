@@ -481,18 +481,29 @@ async function solicitarCAE(token, sign, cuit, datos) {
       numero: parseInt(campos.CbteNro || numeroComprobante, 10),
     };
   } else {
-    // Extraer observaciones/errores
+    // Extraer observaciones/errores del detalle Y del nivel cabecera
     const obs = [];
+
+    // Errores/observaciones dentro de FECAEDetResponse
     const obsRegex = /<Obs>[\s\S]*?<Code>(\d+)<\/Code>[\s\S]*?<Msg>([\s\S]*?)<\/Msg>[\s\S]*?<\/Obs>/g;
     let obsMatch;
     while ((obsMatch = obsRegex.exec(detXml)) !== null) {
       obs.push({ code: obsMatch[1], msg: obsMatch[2].trim() });
     }
-
     const errRegex = /<Err>[\s\S]*?<Code>(\d+)<\/Code>[\s\S]*?<Msg>([\s\S]*?)<\/Msg>[\s\S]*?<\/Err>/g;
     let errMatch2;
     while ((errMatch2 = errRegex.exec(detXml)) !== null) {
       obs.push({ code: errMatch2[1], msg: errMatch2[2].trim(), tipo: 'error' });
+    }
+
+    // Errores a nivel del FECAESolicitarResult (bloque <Errors>)
+    const errGlobalRegex = /<Err>[\s\S]*?<Code>(\d+)<\/Code>[\s\S]*?<Msg>([\s\S]*?)<\/Msg>[\s\S]*?<\/Err>/g;
+    let errGlobal;
+    while ((errGlobal = errGlobalRegex.exec(resultXml)) !== null) {
+      const existe = obs.find(o => o.code === errGlobal[1]);
+      if (!existe) {
+        obs.push({ code: errGlobal[1], msg: errGlobal[2].trim(), tipo: 'error' });
+      }
     }
 
     console.error(`❌ CAE ${resultado === 'R' ? 'Rechazado' : 'Observado'}:`, obs);

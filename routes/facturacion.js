@@ -138,9 +138,9 @@ router.post('/solicitar-cae', async (req, res) => {
     const ultimo = await afipService.consultarUltimoComprobante(token, sign, cuit, ptoVta, cbteTipo);
     const proximoNumero = ultimo + 1;
 
-    // 7. Formatear fecha
-    const fecha = new Date(ticket.fecha);
-    const fechaEmision = afipService.formatFechaComp(fecha);
+    // 7. Formatear fecha actual Argentina (no la del ticket)
+    const nowArgentina = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const fechaEmision = afipService.formatFechaComp(nowArgentina);
 
     // 8. Solicitar CAE
     const resultado = await afipService.solicitarCAE(token, sign, cuit, {
@@ -173,7 +173,7 @@ router.post('/solicitar-cae', async (req, res) => {
       tipoComprobante: cbteTipo,
       numeroComprobante: proximoNumero,
       importeTotal,
-      fechaEmision: afipService.formatFechaQR(fecha),
+      fechaEmision: afipService.formatFechaQR(nowArgentina),
       cae: resultado.cae,
       tipoDocRec: docTipoFinal,
       nroDocRec: docNroFinal,
