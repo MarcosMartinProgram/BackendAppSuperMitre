@@ -169,8 +169,21 @@ router.post('/solicitar-cae', async (req, res) => {
       });
     }
 
-    // 9. Generar QR
-    const qrUrl = afipService.generarUrlQrAfip({
+    // 9. Generar QR como data URL (embebido, no depende de servidor externo)
+    const qrDataUrl = await afipService.generarQrDataUrl({
+      cuit,
+      puntoVenta: ptoVta,
+      tipoComprobante: cbteTipo,
+      numeroComprobante: proximoNumero,
+      importeTotal,
+      fechaEmision: afipService.formatFechaQR(nowUtc),
+      cae: resultado.cae,
+      tipoDocRec: docTipoFinal,
+      nroDocRec: docNroFinal,
+    });
+
+    // URL de verificación ARCA para referencia
+    const qrVerifyUrl = afipService.construirUrlQrAfip({
       cuit,
       puntoVenta: ptoVta,
       tipoComprobante: cbteTipo,
@@ -188,7 +201,7 @@ router.post('/solicitar-cae', async (req, res) => {
       vencimiento_cae: resultado.vencimiento,
       tipo_comprobante_afip: cbteTipo,
       numero_comprobante_afip: proximoNumero,
-      qr_afip_url: qrUrl,
+      qr_afip_url: qrDataUrl,
     });
 
     console.log(`✅ Ticket #${id_ticket} facturado: ${afipService.nombreComprobante(cbteTipo)} N° ${proximoNumero}, CAE: ${resultado.cae}`);
@@ -201,7 +214,8 @@ router.post('/solicitar-cae', async (req, res) => {
       tipoComprobante: cbteTipo,
       nombreComprobante: afipService.nombreComprobante(cbteTipo),
       puntoVenta: ptoVta,
-      qr_url: qrUrl,
+      qr_url: qrDataUrl,
+      qr_verify_url: qrVerifyUrl,
     });
   } catch (err) {
     console.error('❌ Error en /solicitar-cae:', err.message);
@@ -300,8 +314,8 @@ router.post('/anular', async (req, res) => {
       });
     }
 
-    // 6. Generar QR de la NC
-    const qrUrl = afipService.generarUrlQrAfip({
+    // 6. Generar QR de la NC como data URL
+    const qrUrl = await afipService.generarQrDataUrl({
       cuit,
       puntoVenta: ptoVta,
       tipoComprobante: tipoNC,

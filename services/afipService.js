@@ -9,6 +9,14 @@ try {
   forge = null;
 }
 
+let QRCode;
+try {
+  QRCode = require('qrcode');
+} catch (e) {
+  console.warn('⚠️ qrcode no instalado. QR no disponible. Ejecutá: npm install qrcode');
+  QRCode = null;
+}
+
 // ==================== CONFIGURACIÓN ====================
 
 const WSAA_URL = {
@@ -568,7 +576,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
 
 // ==================== QR AFIP ====================
 
-function generarUrlQrAfip(datos) {
+function construirUrlQrAfip(datos) {
   const json = JSON.stringify({
     ver: 1,
     fecha: datos.fechaEmision,
@@ -587,6 +595,21 @@ function generarUrlQrAfip(datos) {
 
   const base64 = Buffer.from(json).toString('base64');
   return `https://www.arca.gob.ar/fe/qr/?p=${base64}`;
+}
+
+async function generarQrDataUrl(datos) {
+  const url = construirUrlQrAfip(datos);
+  if (!QRCode) {
+    console.warn('⚠️ qrcode no disponible, usando URL externa');
+    return url;
+  }
+  try {
+    const dataUrl = await QRCode.toDataURL(url, { width: 200, margin: 1, errorCorrectionLevel: 'M' });
+    return dataUrl;
+  } catch (err) {
+    console.warn('⚠️ Error generando QR data URL:', err.message);
+    return url;
+  }
 }
 
 // ==================== CALCULAR IVA ====================
@@ -684,7 +707,8 @@ module.exports = {
   obtenerTicketAcceso,
   consultarUltimoComprobante,
   solicitarCAE,
-  generarUrlQrAfip,
+  construirUrlQrAfip,
+  generarQrDataUrl,
   calcularAlicuotas,
   nombreComprobante,
   verificarCertificados,
