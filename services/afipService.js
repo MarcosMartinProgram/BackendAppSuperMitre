@@ -325,15 +325,23 @@ async function consultarUltimoComprobante(token, sign, cuit, ptoVta, cbteTipo) {
 </soap:Envelope>`;
 
   console.log(`📊 Consultando último comprobante: tipo=${cbteTipo}, ptoVta=${ptoVta}`);
+  console.log(`   URL WSFE: ${wsfeUrl}`);
 
-  const response = await fetch(wsfeUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
-    },
-    body: soapXml,
-  });
+  let response;
+  try {
+    response = await fetch(wsfeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
+      },
+      body: soapXml,
+    });
+  } catch (fetchErr) {
+    console.error(`❌ Error de red FECompUltimoAutorizado: ${fetchErr.message}`);
+    console.error(`   Tipo: ${fetchErr.name}, Cause: ${fetchErr.cause || 'ninguna'}`);
+    throw new Error(`Error de conexión WSFE: ${fetchErr.message}`);
+  }
 
   const respuesta = await response.text();
   console.log(`📥 Respuesta FECompUltimoAutorizado:\n${respuesta}`);
@@ -444,14 +452,23 @@ async function solicitarCAE(token, sign, cuit, datos) {
   console.log(`   DocTipo=${docTipo}, DocNro=${docNro}, CondIVAReceptor=${condicionIVAReceptorId}, Concepto=1`);
   console.log(`   XML FECAESolicitar:\n${soapXml}`);
 
-  const response = await fetch(wsfeUrl, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'text/xml; charset=utf-8',
-      SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
-    },
-    body: soapXml,
-  });
+  console.log(`   URL WSFE: ${wsfeUrl}`);
+
+  let response;
+  try {
+    response = await fetch(wsfeUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
+      },
+      body: soapXml,
+    });
+  } catch (fetchErr) {
+    console.error(`❌ Error de red FECAESolicitar: ${fetchErr.message}`);
+    console.error(`   Tipo: ${fetchErr.name}, Cause: ${fetchErr.cause || 'ninguna'}`);
+    throw new Error(`Error de conexión WSFE: ${fetchErr.message}`);
+  }
 
   const respuesta = await response.text();
   console.log(`📥 Respuesta WSFE (HTTP ${response.status}):\n${respuesta}`);
