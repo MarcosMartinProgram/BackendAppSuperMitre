@@ -70,11 +70,20 @@ function formatFechaQR(date) {
 
 function parseXmlSimple(xml) {
   const result = {};
+  // Tags con namespace: <ar:CbteNro>4</ar:CbteNro>
   const tagRegex = /<(\w+):(\w+)>([^<]*)<\/\1:\2>/g;
   let match;
   while ((match = tagRegex.exec(xml)) !== null) {
     result[match[2]] = match[3].trim();
   }
+  // Tags sin namespace: <CbteNro>4</CbteNro>
+  const plainTagRegex = /<(\w+)>([^<]*)<\/\1>/g;
+  while ((match = plainTagRegex.exec(xml)) !== null) {
+    if (!(match[1] in result)) {
+      result[match[1]] = match[2].trim();
+    }
+  }
+  // Self-closing con namespace
   const selfClosing = /<(\w+):(\w+)\s*\/>/g;
   while ((match = selfClosing.exec(xml)) !== null) {
     result[match[2]] = '';
