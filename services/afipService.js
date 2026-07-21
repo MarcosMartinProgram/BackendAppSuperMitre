@@ -458,6 +458,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
   }
 
   const resultXml = resultMatch[1];
+  console.log('📋 Resultado FECAESolicitar completo:', resultXml);
 
   // Buscar resultado del detalle
   const detMatch = resultXml.match(/<FECAEDetResponse>([\s\S]*?)<\/FECAEDetResponse>/);
@@ -466,7 +467,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
   }
 
   const detXml = detMatch[1];
-  console.log('📋 Respuesta completa WSFE:', detXml);
+  console.log('📋 Detalle respuesta WSFE:', detXml);
   const campos = parseXmlSimple(detXml);
 
   const resultado = campos.Resultado; // A=Aprobado, R=Rechazado, O=Observado
