@@ -583,7 +583,7 @@ router.post('/registrar', async (req, res) => {
       id_usuario
     });
 
-    console.log('✅ Cliente creado:', nuevoCliente.nombre);
+    console.log('✅ Cliente creado:', nuevoCliente.id_cliente);
     res.status(201).json({
       message: 'Cliente registrado exitosamente',
       cliente: nuevoCliente
@@ -655,7 +655,7 @@ router.post('/:id/pago', async (req, res) => {
 
     await transaction.commit();
 
-    console.log(`💰 Pago registrado para ${cliente.nombre}: $${monto}`);
+    console.log(`💰 Pago registrado: #${cliente.id_cliente} $${monto}`);
     res.json({
       message: 'Pago registrado exitosamente',
       numeroRecibo: numeroRecibo,
@@ -710,7 +710,7 @@ router.post('/:id/saldar', async (req, res) => {
 
     await transaction.commit();
 
-    console.log(`✅ Cuenta saldada para ${cliente.nombre}`);
+    console.log(`✅ Cuenta saldada: #${cliente.id_cliente}`);
     res.json({
       message: 'Cuenta corriente saldada exitosamente',
       saldo_anterior: saldoActual,
@@ -778,7 +778,7 @@ router.post('/:id/entrega-parcial', async (req, res) => {
 
     await transaction.commit();
 
-    console.log(`💵 Entrega parcial registrada para ${cliente.nombre}: $${monto}`);
+    console.log(`💵 Entrega parcial registrada: #${cliente.id_cliente} $${monto}`);
     res.json({
       message: 'Entrega parcial registrada exitosamente',
       saldo_anterior: saldoAnterior,
@@ -800,12 +800,6 @@ router.post('/:id/asociar-ticket', async (req, res) => {
     const { id } = req.params;
     const { id_ticket, descripcion } = req.body;
     
-    console.log(`🔗 === INICIANDO ASOCIACIÓN DE TICKET ===`);
-    console.log(`📋 Cliente ID: ${id}`);
-    console.log(`🎫 Ticket ID: ${id_ticket}`);
-    console.log(`📝 Descripción: ${descripcion || 'Sin descripción'}`);
-    
-    // ✅ VALIDAR PARÁMETROS
     if (!id || !id_ticket) {
       return res.status(400).json({ 
         error: 'Cliente ID y Ticket ID son requeridos',
@@ -813,71 +807,37 @@ router.post('/:id/asociar-ticket', async (req, res) => {
       });
     }
     
-    // ✅ PASO 1: VERIFICAR QUE EL CLIENTE EXISTE Y TIENE CUENTA CORRIENTE
-    console.log(`👤 Paso 1: Buscando cliente ${id}...`);
     const cliente = await Cliente.findByPk(id);
     if (!cliente) {
-      console.log(`❌ Cliente ${id} no encontrado`);
       return res.status(404).json({ error: 'Cliente no encontrado' });
     }
     
-    console.log(`✅ Cliente encontrado: ${cliente.nombre}`);
-    console.log(`💰 Saldo actual: $${cliente.saldo_cuenta_corriente || 0}`);
-    console.log(`🏪 Es cuenta corriente: ${cliente.es_cuenta_corriente}`);
-    
     if (!cliente.es_cuenta_corriente) {
-      console.log(`❌ Cliente no tiene cuenta corriente habilitada`);
       return res.status(400).json({ error: 'El cliente no tiene habilitada la cuenta corriente' });
     }
     
-    // ✅ PASO 2: BUSCAR EL TICKET
-    console.log(`🎫 Paso 2: Buscando ticket ${id_ticket}...`);
     const ticket = await Ticket.findByPk(id_ticket);
     if (!ticket) {
-      console.log(`❌ Ticket ${id_ticket} no encontrado`);
       return res.status(404).json({ error: 'Ticket no encontrado' });
     }
     
-    console.log(`✅ Ticket encontrado:`);
-    console.log(`  - ID: ${ticket.id_ticket}`);
-    console.log(`  - Total: $${ticket.total}`);
-    console.log(`  - Cliente actual: ${ticket.id_cliente || 'NULL'}`);
-    console.log(`  - Tipo pago: ${ticket.tipo_pago || 'NULL'}`);
-    console.log(`  - Fecha: ${ticket.fecha}`);
-    
-    // ✅ PASO 3: VERIFICAR QUE EL TICKET NO ESTÉ YA ASOCIADO
     if (ticket.id_cliente) {
-      console.log(`❌ Ticket ya asociado al cliente ${ticket.id_cliente}`);
       return res.status(400).json({ 
         error: `El ticket ya está asociado al cliente ${ticket.id_cliente}` 
       });
     }
     
-    // ✅ PASO 4: INICIAR TRANSACCIÓN
-    console.log(`🔄 Paso 4: Iniciando transacción...`);
     transaction = await sequelize.transaction();
     
-    // ✅ PASO 5: ACTUALIZAR EL TICKET
-    console.log(`📝 Paso 5: Actualizando ticket...`);
     await ticket.update({
       id_cliente: parseInt(id),
       tipo_pago: 'cuenta_corriente'
     }, { transaction });
     
-    console.log(`✅ Ticket actualizado exitosamente`);
-    
-    // ✅ PASO 6: PREPARAR DATOS PARA MOVIMIENTO
     const montoTicket = parseFloat(ticket.total);
     const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente || 0);
     const nuevoSaldo = saldoAnterior + montoTicket;
     
-    console.log(`💰 Paso 6: Calculando saldos...`);
-    console.log(`  - Monto ticket: $${montoTicket}`);
-    console.log(`  - Saldo anterior: $${saldoAnterior}`);
-    console.log(`  - Nuevo saldo: $${nuevoSaldo}`);
-    
-    // ✅ PASO 7: CREAR MOVIMIENTO EN CUENTA CORRIENTE
-    console.log(`📊 Paso 7: Creando movimiento de cuenta corriente...`);
     const nuevoMovimiento = await MovimientoCuentaCorriente.create({
       id_cliente: parseInt(id),
       id_ticket: parseInt(id_ticket),
@@ -889,24 +849,14 @@ router.post('/:id/asociar-ticket', async (req, res) => {
       saldo_actual: nuevoSaldo
     }, { transaction });
     
-    console.log(`✅ Movimiento creado con ID: ${nuevoMovimiento.id_movimiento}`);
-    
-    // ✅ PASO 8: ACTUALIZAR SALDO DEL CLIENTE
-    console.log(`👤 Paso 8: Actualizando saldo del cliente...`);
     await cliente.update({
       saldo_cuenta_corriente: nuevoSaldo
     }, { transaction });
     
-    console.log(`✅ Saldo del cliente actualizado`);
-    
-    // ✅ PASO 9: CONFIRMAR TRANSACCIÓN
-    console.log(`✅ Paso 9: Confirmando transacción...`);
     await transaction.commit();
-    transaction = null; // Marcar como completada
+    transaction = null;
     
-    console.log(`🎉 === ASOCIACIÓN COMPLETADA EXITOSAMENTE ===`);
-    console.log(`✅ Ticket ${id_ticket} asociado al cliente ${cliente.nombre}`);
-    console.log(`💰 Nuevo saldo: $${nuevoSaldo}`);
+    console.log(`✅ Ticket ${id_ticket} asociado a cliente #${id}`);
     
     res.json({
       success: true,
@@ -991,7 +941,7 @@ router.put('/:id', async (req, res) => {
       limite_credito: parseFloat(limite_credito) || cliente.limite_credito
     });
 
-    console.log('✅ Cliente actualizado:', cliente.nombre);
+    console.log('✅ Cliente actualizado:', cliente.id_cliente);
     res.json({ message: 'Cliente actualizado exitosamente', cliente });
 
   } catch (error) {

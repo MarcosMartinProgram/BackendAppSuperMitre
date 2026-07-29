@@ -20,7 +20,7 @@ router.get('/webhook', webhook);
 // =============================================
 router.post('/registrar', async (req, res) => {
   try {
-    console.log('📥 Recibido pedido para registrar:', JSON.stringify(req.body, null, 2));
+    console.log('📥 Recibido pedido para registrar:', req.body.order_id);
 
     const { order_id, payment_id, total, productos, cliente_nombre, cliente_email, cliente_telefono, cliente_direccion, id_usuario, origen } = req.body;
 

@@ -305,7 +305,6 @@ async function obtenerTicketAcceso(mode) {
     return { token, sign, expiration };
   } catch (err) {
     console.error('❌ Error parseando respuesta WSAA:', err.message);
-    console.error('Respuesta completa:', respuesta.substring(0, 1000));
     throw new Error(`Error parseando WSAA: ${err.message}`);
   }
 }
@@ -352,7 +351,7 @@ async function consultarUltimoComprobante(token, sign, cuit, ptoVta, cbteTipo) {
   }
 
   const respuesta = await response.text();
-  console.log(`📥 Respuesta FECompUltimoAutorizado:\n${respuesta}`);
+    console.log(`📥 Respuesta FECompUltimoAutorizado (${respuesta.length} bytes)`);
 
   if (!response.ok) {
     throw new Error(`WSFE HTTP ${response.status}`);
@@ -457,8 +456,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
 
   console.log(`📄 Solicitando CAE: tipo=${tipoComprobante}, ptoVta=${puntoVenta}, nro=${numeroComprobante}, fecha=${fechaEmision}`);
   console.log(`   Importe total: $${separarDecimales(importeTotal)}, Neto: $${separarDecimales(impNeto)}, IVA: $${separarDecimales(impIVA)}, Conc: $${separarDecimales(impTotConc)}, Ex: $${separarDecimales(impOpEx)}, Trib: $${separarDecimales(impTrib)}`);
-  console.log(`   DocTipo=${docTipo}, DocNro=${docNro}, CondIVAReceptor=${condicionIVAReceptorId}, Concepto=1`);
-  console.log(`   XML FECAESolicitar:\n${soapXml}`);
+  console.log(`   DocTipo=${docTipo}, CondIVAReceptor=${condicionIVAReceptorId}, Concepto=1`);
 
   console.log(`   URL WSFE: ${wsfeUrl}`);
 
@@ -479,7 +477,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
   }
 
   const respuesta = await response.text();
-  console.log(`📥 Respuesta WSFE (HTTP ${response.status}):\n${respuesta}`);
+  console.log(`📥 Respuesta WSFE (HTTP ${response.status}, ${respuesta.length} bytes)`);
 
   if (!response.ok) {
     throw new Error(`WSFE HTTP ${response.status}: ${respuesta.substring(0, 500)}`);
@@ -496,7 +494,7 @@ async function solicitarCAE(token, sign, cuit, datos) {
   }
 
   const resultXml = resultMatch[1];
-  console.log('📋 Resultado FECAESolicitar completo:', resultXml);
+  console.log('📋 Resultado FECAESolicitar recibido');
 
   // Buscar errores a nivel del FECAESolicitarResult (bloque <Errors> fuera de FECAEDetResponse)
   const globalErrors = [];
@@ -525,7 +523,6 @@ async function solicitarCAE(token, sign, cuit, datos) {
   }
 
   const detXml = detMatch[1];
-  console.log('📋 Detalle respuesta WSFE:', detXml);
   const campos = parseXmlSimple(detXml);
 
   const resultado = campos.Resultado; // A=Aprobado, R=Rechazado, O=Observado

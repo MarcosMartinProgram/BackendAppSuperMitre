@@ -211,7 +211,7 @@ const crearQR = async (req, res) => {
             items
         };
 
-        console.log("📦 Body orden QR:", JSON.stringify(orderBody, null, 2));
+        console.log("📦 Orden QR creada con items:", items.length);
 
         const order = await mpRequest("POST", "/v1/orders", orderBody);
 
