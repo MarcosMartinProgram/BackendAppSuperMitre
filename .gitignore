@@ -3,3 +3,6 @@ node_modules
 test/
 docs/
 certs/
+
+# Agentes opencode (locales, no subir a github)
+.agents/
