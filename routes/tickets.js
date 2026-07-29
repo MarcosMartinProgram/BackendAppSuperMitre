@@ -1,20 +1,21 @@
-// /routes/tickets.js
 const express = require('express');
 const router = express.Router();
 const Ticket = require('../models/Ticket');
 const Cliente = require('../models/Cliente');
 const MovimientoCuentaCorriente = require('../models/MovimientoCuentaCorriente');
 const sequelize = require('../config/database');
+const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
-// ✅ REEMPLAZAR COMPLETAMENTE LA FUNCIÓN POST
+router.use(verificarToken);
+
 router.post('/', async (req, res) => {
   const transaction = await sequelize.transaction();
 
   try {
-    const { 
-      productos, 
-      descuento, 
-      total, 
+    const {
+      productos,
+      descuento,
+      total,
       pago_recibido = 0,
       vuelto = 0,
       entrega = 0,
@@ -23,14 +24,6 @@ router.post('/', async (req, res) => {
       id_vendedor = null
     } = req.body;
 
-    console.log('📋 Datos recibidos:', {
-      total: parseFloat(total),
-      entrega: parseFloat(entrega),
-      tipo_pago,
-      id_cliente
-    });
-
-    // Crear el ticket
     const nuevoTicket = await Ticket.create({
       productos,
       descuento: parseFloat(descuento) || 0,
@@ -43,13 +36,10 @@ router.post('/', async (req, res) => {
       id_vendedor: id_vendedor || null
     }, { transaction });
 
-    console.log('✅ Ticket creado:', nuevoTicket.id_ticket);
-
-    // ✅ SOLO PROCESAR CUENTA CORRIENTE SI CORRESPONDE (incluye parcial)
     const esCuentaCorriente = tipo_pago === 'cuenta_corriente' || tipo_pago === 'cuenta_corriente_parcial';
     if (esCuentaCorriente && id_cliente) {
       const cliente = await Cliente.findByPk(id_cliente, { transaction });
-      
+
       if (!cliente) {
         await transaction.rollback();
         return res.status(400).json({ error: 'Cliente no encontrado' });
@@ -63,23 +53,14 @@ router.post('/', async (req, res) => {
       const saldoAnterior = parseFloat(cliente.saldo_cuenta_corriente) || 0;
       const totalTicket = parseFloat(total);
       const entregaParcial = parseFloat(entrega);
-      
-      // ✅ CÁLCULO CORRECTO: Solo el monto que NO se pagó va a crédito
+
       const montoACredito = totalTicket - entregaParcial;
       const saldoNuevo = saldoAnterior + montoACredito;
 
-      console.log('💰 CÁLCULO DE CUENTA CORRIENTE:');
-      
-      console.log(`  💵 Entrega en efectivo: $${entregaParcial}`);
-      console.log(`  🏦 Monto a crédito: $${montoACredito}`);
-      console.log(`  📈 Saldo anterior: $${saldoAnterior}`);
-      console.log(`  📈 Saldo nuevo: $${saldoNuevo}`);
-
-      // Verificar límite de crédito
       if (cliente.limite_credito && saldoNuevo > parseFloat(cliente.limite_credito)) {
         await transaction.rollback();
         const disponible = parseFloat(cliente.limite_credito) - saldoAnterior;
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Límite de crédito excedido',
           saldo_actual: saldoAnterior,
           limite_credito: cliente.limite_credito,
@@ -88,26 +69,21 @@ router.post('/', async (req, res) => {
         });
       }
 
-      // Actualizar saldo del cliente
       await cliente.update({
         saldo_cuenta_corriente: saldoNuevo
       }, { transaction });
 
-      // ✅ REGISTRAR MOVIMIENTO DE VENTA COMPLETA
       await MovimientoCuentaCorriente.create({
         id_cliente: parseInt(id_cliente),
         id_ticket: nuevoTicket.id_ticket,
         tipo_movimiento: 'venta',
-        monto: totalTicket, // ✅ TOTAL COMPLETO DE LA VENTA
+        monto: totalTicket,
         descripcion: `Venta - Ticket #${nuevoTicket.id_ticket}`,
         saldo_anterior: saldoAnterior,
-        saldo_actual: saldoAnterior + totalTicket, // Saldo intermedio después de la venta
+        saldo_actual: saldoAnterior + totalTicket,
         id_usuario_registro: id_vendedor
       }, { transaction });
 
-      console.log(`✅ Registrado movimiento de venta: +$${totalTicket}`);
-
-      // ✅ REGISTRAR ENTREGA PARCIAL SI EXISTE
       if (entregaParcial > 0) {
         await MovimientoCuentaCorriente.create({
           id_cliente: parseInt(id_cliente),
@@ -115,19 +91,15 @@ router.post('/', async (req, res) => {
           tipo_movimiento: 'entrega_parcial',
           monto: entregaParcial,
           descripcion: `Entrega efectivo - Ticket #${nuevoTicket.id_ticket}`,
-          saldo_anterior: saldoAnterior + totalTicket, // Después de la venta
-          saldo_actual: saldoNuevo, // Saldo final después de la entrega
+          saldo_anterior: saldoAnterior + totalTicket,
+          saldo_actual: saldoNuevo,
           id_usuario_registro: id_vendedor
         }, { transaction });
-
-        console.log(`✅ Registrado movimiento de entrega parcial: -$${entregaParcial}`);
       }
-
-      console.log(`💰 Cuenta corriente actualizada para ${cliente.nombre}: $${saldoAnterior} → $${saldoNuevo}`);
     }
 
     await transaction.commit();
-    
+
     const ticketCompleto = await Ticket.findByPk(nuevoTicket.id_ticket, {
       include: [
         {
@@ -138,23 +110,21 @@ router.post('/', async (req, res) => {
       ]
     });
 
-    console.log('✅ Ticket completado exitosamente:', nuevoTicket.id_ticket);
     res.status(201).json({
       ticket: ticketCompleto,
       mensaje: tipo_pago === 'cuenta_corriente' ? 'Venta registrada en cuenta corriente' : 'Venta de contado registrada'
     });
 
   } catch (error) {
-    console.error('❌ Error al guardar el ticket:', error);
+    console.error('Error al guardar el ticket:', error);
     await transaction.rollback();
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Error al guardar el ticket',
-      details: error.message 
+      details: error.message
     });
   }
 });
 
-// ✅ OBTENER TICKETS CON INFORMACIÓN DE CLIENTES
 router.get('/', async (req, res) => {
   try {
     const { incluir_cliente = 'true', limite = 50 } = req.query;
@@ -182,17 +152,15 @@ router.get('/', async (req, res) => {
     }
 
     const tickets = await Ticket.findAll(options);
-    
-    console.log(`✅ Tickets obtenidos: ${tickets.length}`);
+
     res.json(tickets);
-    
+
   } catch (error) {
-    console.error('❌ Error al obtener tickets:', error);
+    console.error('Error al obtener tickets:', error);
     res.status(500).json({ error: 'Error al obtener los tickets' });
   }
 });
 
-// ✅ OBTENER TICKET POR ID CON DETALLES COMPLETOS
 router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -218,7 +186,6 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Ticket no encontrado' });
     }
 
-    // Si es cuenta corriente (incluye parcial), obtener movimientos relacionados
     let movimientos = [];
     if ((ticket.tipo_pago === 'cuenta_corriente' || ticket.tipo_pago === 'cuenta_corriente_parcial') && ticket.id_cliente) {
       movimientos = await MovimientoCuentaCorriente.findAll({
@@ -241,7 +208,7 @@ router.get('/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error al obtener ticket:', error);
+    console.error('Error al obtener ticket:', error);
     res.status(500).json({ error: 'Error al obtener el ticket' });
   }
 });

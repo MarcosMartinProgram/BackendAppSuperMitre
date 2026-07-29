@@ -1,123 +1,160 @@
-// routes/reportes.js
 const express = require('express');
 const router = express.Router();
 const sequelize = require('../config/database');
 const { QueryTypes } = require('sequelize');
+const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
-// ✅ Reporte: Ventas por vendedor 
-router.get('/ventas-por-vendedor', async (req, res) => {
+function validarFecha(fecha) {
+  if (!fecha) return false;
+  const regex = /^\d{4}-\d{2}-\d{2}$/;
+  return regex.test(fecha) && !isNaN(Date.parse(fecha));
+}
+
+router.get('/ventas-por-vendedor', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
-    
-    let whereClause = '';
+
+    let query, replacements;
+
     if (fechaInicio && fechaFin) {
-      whereClause = `WHERE DATE(t.fecha) BETWEEN '${fechaInicio}' AND '${fechaFin}'`;
+      if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) {
+        return res.status(400).json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' });
+      }
+      query = `
+        SELECT
+          COALESCE(u.nombre, 'Sistema') as vendedor,
+          COUNT(t.id_ticket) as cantidadVentas,
+          ROUND(SUM(t.total), 2) as totalVentas,
+          ROUND(AVG(t.total), 2) as promedioVenta
+        FROM tickets t
+        LEFT JOIN usuarios u ON t.id_vendedor = u.id_usuario
+        WHERE DATE(t.fecha) BETWEEN :fechaInicio AND :fechaFin
+        GROUP BY t.id_vendedor, u.nombre
+        ORDER BY totalVentas DESC
+      `;
+      replacements = { fechaInicio, fechaFin };
     } else {
-      whereClause = `WHERE t.fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)`;
+      query = `
+        SELECT
+          COALESCE(u.nombre, 'Sistema') as vendedor,
+          COUNT(t.id_ticket) as cantidadVentas,
+          ROUND(SUM(t.total), 2) as totalVentas,
+          ROUND(AVG(t.total), 2) as promedioVenta
+        FROM tickets t
+        LEFT JOIN usuarios u ON t.id_vendedor = u.id_usuario
+        WHERE t.fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)
+        GROUP BY t.id_vendedor, u.nombre
+        ORDER BY totalVentas DESC
+      `;
+      replacements = {};
     }
 
-    const query = `
-      SELECT 
-        COALESCE(u.nombre, 'Sistema') as vendedor,
-        COUNT(t.id_ticket) as cantidadVentas,
-        ROUND(SUM(t.total), 2) as totalVentas,
-        ROUND(AVG(t.total), 2) as promedioVenta
-      FROM tickets t
-      LEFT JOIN usuarios u ON t.id_vendedor = u.id_usuario
-      ${whereClause}
-      GROUP BY t.id_vendedor, u.nombre
-      ORDER BY totalVentas DESC
-    `;
+    const resultados = await sequelize.query(query, {
+      type: QueryTypes.SELECT,
+      replacements
+    });
 
-    const resultados = await sequelize.query(query, { type: QueryTypes.SELECT });
-    
-    console.log('✅ Ventas por vendedor:', resultados.length, 'registros');
     res.json(resultados);
 
   } catch (error) {
-    console.error('❌ Error ventas-por-vendedor:', error);
-    res.status(500).json({ 
-      error: 'Error al generar reporte de ventas por vendedor',
-      details: error.message 
-    });
+    console.error('Error ventas-por-vendedor:', error);
+    res.status(500).json({ error: 'Error al generar reporte de ventas por vendedor' });
   }
 });
 
-// ✅ Reporte: Ventas por cliente
-router.get('/ventas-por-usuario', async (req, res) => {
+router.get('/ventas-por-usuario', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
-    
-    let whereClause = '';
+
+    let query, replacements;
+
     if (fechaInicio && fechaFin) {
-      whereClause = `WHERE DATE(fecha) BETWEEN '${fechaInicio}' AND '${fechaFin}'`;
+      if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) {
+        return res.status(400).json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' });
+      }
+      query = `
+        SELECT
+          'Cliente Genérico' as usuario,
+          COUNT(*) as cantidadCompras,
+          ROUND(SUM(total), 2) as totalVentas,
+          ROUND(AVG(total), 2) as promedioCompra
+        FROM tickets
+        WHERE DATE(fecha) BETWEEN :fechaInicio AND :fechaFin
+        HAVING COUNT(*) > 0
+        ORDER BY totalVentas DESC
+      `;
+      replacements = { fechaInicio, fechaFin };
     } else {
-      whereClause = `WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)`;
+      query = `
+        SELECT
+          'Cliente Genérico' as usuario,
+          COUNT(*) as cantidadCompras,
+          ROUND(SUM(total), 2) as totalVentas,
+          ROUND(AVG(total), 2) as promedioCompra
+        FROM tickets
+        WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)
+        HAVING COUNT(*) > 0
+        ORDER BY totalVentas DESC
+      `;
+      replacements = {};
     }
 
-    const query = `
-      SELECT 
-        'Cliente Genérico' as usuario,
-        COUNT(*) as cantidadCompras,
-        ROUND(SUM(total), 2) as totalVentas,
-        ROUND(AVG(total), 2) as promedioCompra
-      FROM tickets
-      ${whereClause}
-      HAVING COUNT(*) > 0
-      ORDER BY totalVentas DESC
-    `;
+    const resultados = await sequelize.query(query, {
+      type: QueryTypes.SELECT,
+      replacements
+    });
 
-    const resultados = await sequelize.query(query, { type: QueryTypes.SELECT });
-    
-    console.log('✅ Ventas por usuario:', resultados.length, 'registros');
     res.json(resultados);
 
   } catch (error) {
-    console.error('❌ Error ventas-por-usuario:', error);
-    res.status(500).json({ 
-      error: 'Error al generar reporte de ventas por usuario',
-      details: error.message 
-    });
+    console.error('Error ventas-por-usuario:', error);
+    res.status(500).json({ error: 'Error al generar reporte de ventas por usuario' });
   }
 });
 
-// ✅ Reporte: Productos más vendidos (desde JSON de tickets)
-router.get('/productos-mas-vendidos', async (req, res) => {
+router.get('/productos-mas-vendidos', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
-    
-    let whereClause = '';
+
+    let whereClause, replacements;
+
     if (fechaInicio && fechaFin) {
-      whereClause = `WHERE DATE(fecha) BETWEEN '${fechaInicio}' AND '${fechaFin}'`;
+      if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) {
+        return res.status(400).json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' });
+      }
+      whereClause = 'WHERE DATE(fecha) BETWEEN :fechaInicio AND :fechaFin';
+      replacements = { fechaInicio, fechaFin };
     } else {
-      whereClause = `WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)`;
+      whereClause = 'WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+      replacements = {};
     }
 
-    // Obtener todos los tickets del periodo
     const queryTickets = `
       SELECT id_ticket, productos, total, fecha
-      FROM tickets 
+      FROM tickets
       ${whereClause}
       ORDER BY fecha DESC
     `;
 
-    const tickets = await sequelize.query(queryTickets, { type: QueryTypes.SELECT });
-    
-    // Procesar los productos desde el JSON
+    const tickets = await sequelize.query(queryTickets, {
+      type: QueryTypes.SELECT,
+      replacements
+    });
+
     const productosVendidos = {};
-    
+
     tickets.forEach(ticket => {
       try {
         if (ticket.productos) {
           const productos = JSON.parse(ticket.productos);
-          
+
           if (Array.isArray(productos)) {
             productos.forEach(producto => {
               const codigo = producto.codigo_barras || producto.codigo;
               const nombre = producto.nombre || 'Producto sin nombre';
               const cantidad = producto.cantidad || 1;
               const precio = producto.precio || 0;
-              
+
               if (!productosVendidos[codigo]) {
                 productosVendidos[codigo] = {
                   producto: nombre,
@@ -127,20 +164,19 @@ router.get('/productos-mas-vendidos', async (req, res) => {
                   precioPromedio: precio
                 };
               }
-              
+
               productosVendidos[codigo].cantidadVendida += cantidad;
               productosVendidos[codigo].totalVendido += (cantidad * precio);
-              productosVendidos[codigo].precioPromedio = 
+              productosVendidos[codigo].precioPromedio =
                 productosVendidos[codigo].totalVendido / productosVendidos[codigo].cantidadVendida;
             });
           }
         }
       } catch (parseError) {
-        console.error('Error parseando productos del ticket:', ticket.id_ticket, parseError);
+        console.error('Error parseando productos del ticket:', ticket.id_ticket, parseError.message);
       }
     });
 
-    // Convertir a array y ordenar
     const resultados = Object.values(productosVendidos)
       .sort((a, b) => b.cantidadVendida - a.cantidadVendida)
       .slice(0, 20)
@@ -150,65 +186,64 @@ router.get('/productos-mas-vendidos', async (req, res) => {
         precioPromedio: Math.round(item.precioPromedio * 100) / 100
       }));
 
-    console.log('✅ Productos más vendidos:', resultados.length, 'productos');
     res.json(resultados);
 
   } catch (error) {
-    console.error('❌ Error productos-mas-vendidos:', error);
-    res.status(500).json({ 
-      error: 'Error al generar reporte de productos más vendidos',
-      details: error.message 
-    });
+    console.error('Error productos-mas-vendidos:', error);
+    res.status(500).json({ error: 'Error al generar reporte de productos más vendidos' });
   }
 });
 
-// ✅ Reporte: Ventas por rubro (desde JSON + productos)
-router.get('/ventas-por-rubro', async (req, res) => {
+router.get('/ventas-por-rubro', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { fechaInicio, fechaFin } = req.query;
-    
-    let whereClause = '';
+
+    let whereClause, replacements;
+
     if (fechaInicio && fechaFin) {
-      whereClause = `WHERE DATE(fecha) BETWEEN '${fechaInicio}' AND '${fechaFin}'`;
+      if (!validarFecha(fechaInicio) || !validarFecha(fechaFin)) {
+        return res.status(400).json({ error: 'Formato de fecha inválido (YYYY-MM-DD)' });
+      }
+      whereClause = 'WHERE DATE(fecha) BETWEEN :fechaInicio AND :fechaFin';
+      replacements = { fechaInicio, fechaFin };
     } else {
-      whereClause = `WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)`;
+      whereClause = 'WHERE fecha >= DATE_SUB(NOW(), INTERVAL 1 MONTH)';
+      replacements = {};
     }
 
-    // Obtener tickets
     const queryTickets = `
       SELECT productos FROM tickets ${whereClause}
     `;
-    const tickets = await sequelize.query(queryTickets, { type: QueryTypes.SELECT });
-    
-    // Obtener información de rubros
+    const tickets = await sequelize.query(queryTickets, {
+      type: QueryTypes.SELECT,
+      replacements
+    });
+
     const queryRubros = `
       SELECT p.codigo_barras, r.nombre as rubro_nombre
       FROM productos p
       LEFT JOIN rubros r ON p.id_rubro = r.id_rubro
     `;
     const productosRubros = await sequelize.query(queryRubros, { type: QueryTypes.SELECT });
-    
-    // Crear mapa de productos a rubros
+
     const mapaRubros = {};
     productosRubros.forEach(item => {
       mapaRubros[item.codigo_barras] = item.rubro_nombre || 'Sin rubro';
     });
 
-    // Procesar ventas por rubro
     const ventasPorRubro = {};
-    
+
     tickets.forEach(ticket => {
       try {
         if (ticket.productos) {
           const productos = JSON.parse(ticket.productos);
-          
           if (Array.isArray(productos)) {
             productos.forEach(producto => {
               const codigo = producto.codigo_barras || producto.codigo;
               const cantidad = producto.cantidad || 1;
               const precio = producto.precio || 0;
               const rubro = mapaRubros[codigo] || 'Sin rubro';
-              
+
               if (!ventasPorRubro[rubro]) {
                 ventasPorRubro[rubro] = {
                   rubro: rubro,
@@ -217,7 +252,7 @@ router.get('/ventas-por-rubro', async (req, res) => {
                   unidadesVendidas: 0
                 };
               }
-              
+
               ventasPorRubro[rubro].cantidadProductos += 1;
               ventasPorRubro[rubro].totalVendido += (cantidad * precio);
               ventasPorRubro[rubro].unidadesVendidas += cantidad;
@@ -225,11 +260,10 @@ router.get('/ventas-por-rubro', async (req, res) => {
           }
         }
       } catch (parseError) {
-        console.error('Error parseando productos para rubros:', parseError);
+        console.error('Error parseando productos para rubros:', parseError.message);
       }
     });
 
-    // Convertir a array y ordenar
     const resultados = Object.values(ventasPorRubro)
       .sort((a, b) => b.totalVendido - a.totalVendido)
       .map(item => ({
@@ -237,51 +271,46 @@ router.get('/ventas-por-rubro', async (req, res) => {
         totalVendido: Math.round(item.totalVendido * 100) / 100
       }));
 
-    console.log('✅ Ventas por rubro:', resultados.length, 'rubros');
     res.json(resultados);
 
   } catch (error) {
-    console.error('❌ Error ventas-por-rubro:', error);
-    res.status(500).json({ 
-      error: 'Error al generar reporte de ventas por rubro',
-      details: error.message 
-    });
+    console.error('Error ventas-por-rubro:', error);
+    res.status(500).json({ error: 'Error al generar reporte de ventas por rubro' });
   }
 });
 
-// ✅ Dashboard
-router.get('/dashboard', async (req, res) => {
+router.get('/dashboard', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const queries = {
       ventasHoy: `
-        SELECT 
-          COUNT(*) as ventas, 
+        SELECT
+          COUNT(*) as ventas,
           COALESCE(SUM(total), 0) as total
-        FROM tickets 
+        FROM tickets
         WHERE DATE(fecha) = CURDATE()
       `,
       ventasMes: `
-        SELECT 
-          COUNT(*) as ventas, 
+        SELECT
+          COUNT(*) as ventas,
           COALESCE(SUM(total), 0) as total
-        FROM tickets 
-        WHERE MONTH(fecha) = MONTH(CURDATE()) 
+        FROM tickets
+        WHERE MONTH(fecha) = MONTH(CURDATE())
         AND YEAR(fecha) = YEAR(CURDATE())
       `,
       productosStock: `
-        SELECT 
-          COUNT(*) as total, 
+        SELECT
+          COUNT(*) as total,
           COUNT(CASE WHEN stock > 0 THEN 1 END) as conStock,
           COUNT(CASE WHEN stock <= 5 THEN 1 END) as stockBajo
         FROM productos
       `,
       clientesActivos: `
         SELECT COUNT(*) as clientes
-        FROM tickets 
+        FROM tickets
         WHERE fecha >= DATE_SUB(NOW(), INTERVAL 30 DAY)
       `,
       ventasUltimos7Dias: `
-        SELECT 
+        SELECT
           DATE(fecha) as fecha,
           COUNT(*) as ventas,
           ROUND(SUM(total), 2) as total
@@ -291,7 +320,7 @@ router.get('/dashboard', async (req, res) => {
         ORDER BY fecha DESC
       `,
       ticketPromedio: `
-        SELECT 
+        SELECT
           ROUND(AVG(total), 2) as promedio,
           MAX(total) as maximo,
           MIN(total) as minimo
@@ -301,50 +330,45 @@ router.get('/dashboard', async (req, res) => {
     };
 
     const dashboard = {};
-    
+
     for (const [key, query] of Object.entries(queries)) {
       try {
         const resultado = await sequelize.query(query, { type: QueryTypes.SELECT });
-        
+
         if (key === 'ventasUltimos7Dias') {
           dashboard[key] = resultado;
         } else {
           dashboard[key] = resultado[0] || {};
         }
-        
+
       } catch (queryError) {
-        console.error(`❌ Error en query ${key}:`, queryError);
+        console.error(`Error en query ${key}:`, queryError.message);
         dashboard[key] = key === 'ventasUltimos7Dias' ? [] : {};
       }
     }
 
-    console.log('📊 Dashboard generado exitosamente');
     res.json(dashboard);
 
   } catch (error) {
-    console.error('❌ Error en dashboard:', error);
-    res.status(500).json({ 
-      error: 'Error al generar dashboard',
-      details: error.message 
-    });
+    console.error('Error en dashboard:', error);
+    res.status(500).json({ error: 'Error al generar dashboard' });
   }
 });
 
-// ✅ Test
 router.get('/test', async (req, res) => {
   try {
     const testQuery = `
-      SELECT 
+      SELECT
         id_ticket,
         fecha,
         total,
         descuento,
         LEFT(productos, 100) as productos_preview
-      FROM tickets 
-      ORDER BY fecha DESC 
+      FROM tickets
+      ORDER BY fecha DESC
       LIMIT 5
     `;
-    
+
     const resultados = await sequelize.query(testQuery, { type: QueryTypes.SELECT });
 
     res.json({
@@ -359,23 +383,22 @@ router.get('/test', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error en test:', error);
+    console.error('Error en test:', error);
     res.status(500).json({ error: 'Error en test de reportes' });
   }
 });
 
-// ✅ NUEVO: Reporte de productos por rubro con ambas listas de precios
-router.get('/productos-por-rubro', async (req, res) => {
+router.get('/productos-por-rubro', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { incluir_sin_stock, ordenar_por } = req.query;
-    
-    // Construir WHERE clause
+
     let whereClause = '';
+    let replacements = {};
+
     if (incluir_sin_stock !== 'true') {
       whereClause = 'WHERE p.stock > 0';
     }
-    
-    // Determinar ORDER BY
+
     let orderBy = 'ORDER BY r.nombre ASC, p.nombre ASC';
     if (ordenar_por === 'precio_asc') {
       orderBy = 'ORDER BY r.nombre ASC, p.precio ASC';
@@ -386,7 +409,7 @@ router.get('/productos-por-rubro', async (req, res) => {
     }
 
     const query = `
-      SELECT 
+      SELECT
         r.nombre as rubro,
         r.id_rubro,
         p.codigo_barras,
@@ -403,19 +426,19 @@ router.get('/productos-por-rubro', async (req, res) => {
       ${orderBy}
     `;
 
-    console.log('📋 Ejecutando consulta productos-por-rubro:', query);
-    
-    const productos = await sequelize.query(query, { type: QueryTypes.SELECT });
-    
-    // Agrupar productos por rubro
+    const productos = await sequelize.query(query, {
+      type: QueryTypes.SELECT,
+      replacements
+    });
+
     const productosPorRubro = {};
     let totalProductos = 0;
     let valorInventarioLista1 = 0;
     let valorInventarioLista2 = 0;
-    
+
     productos.forEach(producto => {
       const rubro = producto.rubro || 'Sin Rubro';
-      
+
       if (!productosPorRubro[rubro]) {
         productosPorRubro[rubro] = {
           id_rubro: producto.id_rubro,
@@ -426,20 +449,20 @@ router.get('/productos-por-rubro', async (req, res) => {
           valorRubroLista2: 0
         };
       }
-      
+
       const valorLista1 = (producto.precio_lista1 || 0) * (producto.stock || 0);
       const valorLista2 = (producto.precio_lista2 || 0) * (producto.stock || 0);
-      
+
       productosPorRubro[rubro].productos.push({
         ...producto,
         valorStockLista1: valorLista1,
         valorStockLista2: valorLista2
       });
-      
+
       productosPorRubro[rubro].totalProductos += 1;
       productosPorRubro[rubro].valorRubroLista1 += valorLista1;
       productosPorRubro[rubro].valorRubroLista2 += valorLista2;
-      
+
       totalProductos += 1;
       valorInventarioLista1 += valorLista1;
       valorInventarioLista2 += valorLista2;
@@ -456,25 +479,20 @@ router.get('/productos-por-rubro', async (req, res) => {
       fechaGeneracion: new Date().toISOString()
     };
 
-    console.log('✅ Productos por rubro generado:', resultado.resumen);
     res.json(resultado);
 
   } catch (error) {
-    console.error('❌ Error en productos-por-rubro:', error);
-    res.status(500).json({ 
-      error: 'Error al generar listado de productos por rubro',
-      details: error.message 
-    });
+    console.error('Error en productos-por-rubro:', error);
+    res.status(500).json({ error: 'Error al generar listado de productos por rubro' });
   }
 });
 
-// ✅ NUEVO: Versión simplificada para impresión
-router.get('/productos-imprimir', async (req, res) => {
+router.get('/productos-imprimir', verificarToken, verificarRol('master', 'vendedor'), async (req, res) => {
   try {
     const { lista_precios = '1' } = req.query;
-    
+
     const query = `
-      SELECT 
+      SELECT
         COALESCE(r.nombre, 'Sin Rubro') as rubro,
         p.codigo_barras,
         p.nombre as producto,
@@ -488,8 +506,7 @@ router.get('/productos-imprimir', async (req, res) => {
     `;
 
     const productos = await sequelize.query(query, { type: QueryTypes.SELECT });
-    
-    // Agrupar por rubro para impresión
+
     const rubros = {};
     productos.forEach(producto => {
       const nombreRubro = producto.rubro;
@@ -512,11 +529,8 @@ router.get('/productos-imprimir', async (req, res) => {
     res.json(resultado);
 
   } catch (error) {
-    console.error('❌ Error en productos-imprimir:', error);
-    res.status(500).json({ 
-      error: 'Error al generar listado para impresión',
-      details: error.message 
-    });
+    console.error('Error en productos-imprimir:', error);
+    res.status(500).json({ error: 'Error al generar listado para impresión' });
   }
 });
 

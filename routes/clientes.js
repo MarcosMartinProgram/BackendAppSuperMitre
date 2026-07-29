@@ -7,10 +7,11 @@ const bcrypt = require('bcryptjs');
 const Usuario = require('../models/Usuario');
 const Ticket = require('../models/Ticket');
 const sequelize = require('../config/database');
+const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// ✅ RUTA DE PRUEBA PARA VERIFICAR QUE CLIENTES FUNCIONA
+// ✅ RUTAS DE PRUEBA (públicas - solo para verificar conectividad)
 router.get('/test', async (req, res) => {
   try {
     console.log('🧪 Test de ruta de clientes...');
@@ -98,6 +99,9 @@ router.get('/test-models', async (req, res) => {
     });
   }
 });
+
+// Middleware de autenticación para todas las rutas siguientes (excepto test)
+router.use(verificarToken);
 
 // ✅ BUSCAR CLIENTE POR NOMBRE O EMAIL
 router.get('/buscar', async (req, res) => {
