@@ -1,7 +1,6 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const helmet = require('helmet');
 const sequelize = require('./config/database');
 const Usuario = require('./models/Usuario');
 const Ticket = require('./models/Ticket');
@@ -46,11 +45,6 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-}));
 
 app.use(express.json({ limit: '10mb' }));
 
