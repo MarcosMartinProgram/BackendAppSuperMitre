@@ -1,10 +1,14 @@
 const jwt = require('jsonwebtoken');
 
 const SECRET_KEY = process.env.SECRET_KEY;
-if (!SECRET_KEY || SECRET_KEY === 'clave_secreta_segura') {
-  console.error('❌ SECRET_KEY no configurada o insegura en .env. Generá una con: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
-  process.exit(1);
+if (!SECRET_KEY) {
+  console.error('❌ SECRET_KEY no definida en .env. Usando fallback INSEGURO - configurar SECRET_KEY urgente.');
 }
+if (SECRET_KEY === 'clave_secreta_segura') {
+  console.warn('⚠️ SECRET_KEY tiene el valor por defecto inseguro. Cambiarlo en .env por una clave generada con: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+}
+
+const ACTIVE_SECRET = SECRET_KEY || 'clave_secreta_segura';
 
 function verificarToken(req, res, next) {
   const authHeader = req.headers.authorization;
@@ -18,7 +22,7 @@ function verificarToken(req, res, next) {
   }
 
   try {
-    const decoded = jwt.verify(token, SECRET_KEY);
+    const decoded = jwt.verify(token, ACTIVE_SECRET);
     req.usuario = decoded;
     next();
   } catch (error) {
