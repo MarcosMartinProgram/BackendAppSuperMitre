@@ -4,9 +4,20 @@ const router = express.Router();
 const Licencia = require('../models/Licencia');
 const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
-const RSA_PRIVATE_KEY = (process.env.RSA_PRIVATE_KEY || '').replace(/\\n/g, '\n');
-if (!RSA_PRIVATE_KEY) {
-  console.error('RSA_PRIVATE_KEY no definida en .env. El sistema de licencias no funcionará.');
+const RSA_PRIVATE_KEY = (process.env.RSA_PRIVATE_KEY || '')
+  .replace(/\\n/g, '\n')
+  .replace(/\r\n/g, '\n')
+  .replace(/\r/g, '\n');
+
+if (!RSA_PRIVATE_KEY.includes('BEGIN')) {
+  console.error('RSA_PRIVATE_KEY no contiene una clave PEM válida. El sistema de licencias no funcionará.');
+} else {
+  try {
+    crypto.createPrivateKey(RSA_PRIVATE_KEY);
+    console.log('RSA_PRIVATE_KEY cargada correctamente.');
+  } catch (e) {
+    console.error('RSA_PRIVATE_KEY inválida:', e.message);
+  }
 }
 
 function firmarPayload(payload) {
@@ -67,6 +78,13 @@ router.post('/activate', async (req, res) => {
 
     if (licencia.expires_at && new Date(licencia.expires_at) < new Date()) {
       return res.status(400).json({ ok: false, error: 'Licencia vencida' });
+    }
+
+    const duplicada = await Licencia.findOne({
+      where: { hwid: hwid, active: true },
+    });
+    if (duplicada && duplicada.id_licencia !== licencia.id_licencia) {
+      return res.status(400).json({ ok: false, error: 'Este equipo ya tiene una licencia activa vinculada' });
     }
 
     if (licencia.hwid && licencia.hwid !== hwid) {
