@@ -106,4 +106,43 @@ router.get('/list', verificarToken, verificarRol('master'), async (req, res) => 
   }
 });
 
+// PUT /api/licensing/:id — Editar licencia (solo admin)
+router.put('/:id', verificarToken, verificarRol('master'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clientName, expiresAt, active } = req.body;
+
+    const licencia = await Licencia.findByPk(id);
+    if (!licencia) {
+      return res.status(404).json({ ok: false, error: 'Licencia no encontrada' });
+    }
+
+    if (clientName !== undefined) licencia.client_name = clientName;
+    if (expiresAt !== undefined) licencia.expires_at = expiresAt || null;
+    if (active !== undefined) licencia.active = active;
+
+    await licencia.save();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al editar licencia:', error.message);
+    res.status(500).json({ ok: false, error: 'Error interno del servidor' });
+  }
+});
+
+// DELETE /api/licensing/:id — Eliminar licencia (solo admin)
+router.delete('/:id', verificarToken, verificarRol('master'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const licencia = await Licencia.findByPk(id);
+    if (!licencia) {
+      return res.status(404).json({ ok: false, error: 'Licencia no encontrada' });
+    }
+    await licencia.destroy();
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error al eliminar licencia:', error.message);
+    res.status(500).json({ ok: false, error: 'Error interno del servidor' });
+  }
+});
+
 module.exports = router;

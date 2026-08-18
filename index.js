@@ -33,7 +33,7 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin) || /\.vercel\.app$/.test(origin)) {
       callback(null, true);
     } else {
       callback(new Error('Origen no permitido por CORS'));
