@@ -4,7 +4,7 @@ const router = express.Router();
 const Licencia = require('../models/Licencia');
 const { verificarToken, verificarRol } = require('../middleware/authMiddleware');
 
-const RSA_PRIVATE_KEY = process.env.RSA_PRIVATE_KEY;
+const RSA_PRIVATE_KEY = (process.env.RSA_PRIVATE_KEY || '').replace(/\\n/g, '\n');
 if (!RSA_PRIVATE_KEY) {
   console.error('RSA_PRIVATE_KEY no definida en .env. El sistema de licencias no funcionará.');
 }
