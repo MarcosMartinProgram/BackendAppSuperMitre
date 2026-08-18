@@ -19,6 +19,7 @@ const reportesRoutes = require('./routes/reportes');
 const imagenAndroidRoutes = require("./routes/imagenAndroidRoutes");
 const pedidosOnlineRoutes = require('./routes/pedidosOnline');
 const facturacionRoutes = require('./routes/facturacion');
+const licensingRoutes = require('./routes/licensing');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -71,6 +72,7 @@ app.use("/api/mercadopago", mercadoPagoRoutes);
 app.use("/api/imagenAndroid", imagenAndroidRoutes);
 app.use("/api/pedidos-online", pedidosOnlineRoutes);
 app.use("/api/facturacion", facturacionRoutes);
+app.use("/api/licensing", licensingRoutes);
 
 app.get('/api/test-cors', (req, res) => {
   res.json({
